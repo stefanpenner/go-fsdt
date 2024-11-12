@@ -247,6 +247,7 @@ func TestReadmeExample(t *testing.T) {
 	// add a file, with the content of a []byte{} and other more advanced options
 	readme_two := folder.File("README_two.md", FileOptions{
 		Content: []byte("## h1 \n"),
+		Mode:    0666,
 	})
 
 	// create lib/Empty.txt

@@ -8,12 +8,13 @@ import (
 type File struct {
 	// FileInfo might be handy
 	content []byte
+	mode    os.FileMode
 	// encoding string
 }
 
 type FileOptions struct {
 	Content []byte
-	Perm    os.FileMode
+	Mode    os.FileMode
 }
 
 func NewFileString(content string) *File {
@@ -24,12 +25,18 @@ func NewFile(content ...FileOptions) *File {
 	if len(content) == 0 {
 		return &File{
 			content: []byte{},
+			mode:    0666,
 			// encoding: "utf-8",
 		}
 	}
 
+	mode := content[0].Mode
+	if mode == 0 {
+		panic("OMG")
+	}
 	return &File{
 		content: content[0].Content,
+		mode:    mode,
 		// encoding: "utf-8",
 	}
 }
@@ -58,7 +65,7 @@ func (f *File) Type() FolderEntryType {
 }
 
 func (f *File) WriteTo(location string) error {
-	file, err := os.Create(location)
+	file, err := os.OpenFile(location, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.mode)
 	if err != nil {
 		return err
 	}
@@ -71,15 +78,47 @@ func (f *File) Content() []byte {
 	return f.content
 }
 
+func (f *File) Mode() os.FileMode {
+	return f.mode
+}
+
 func (f *File) ContentString() string {
 	return string(f.content)
 }
 
 func (f *File) Equal(entry FolderEntry) bool {
-	if file, ok := entry.(*File); ok {
-		return bytes.Equal(f.content, file.content)
+	equal, _ := f.EqualWithReason(entry)
+	return equal
+}
+
+func (f *File) EqualWithReason(entry FolderEntry) (bool, Reason) {
+	file, isFile := entry.(*File)
+
+	if isFile {
+		if f.mode != file.mode {
+			return false, Reason{
+				Type:   ModeChanged,
+				Before: f.Mode(),
+				After:  file.Mode(),
+			}
+		}
+
+		if bytes.Equal(f.content, file.content) {
+			return true, Reason{}
+		} else {
+			// TODO: maybe should show offset and first char difference
+			return false, Reason{
+				Type:   ContentChanged,
+				Before: f.content,
+				After:  file.content,
+			}
+		}
 	}
-	return false
+	return false, Reason{
+		Type:   TypeChanged,
+		Before: f.Type(),
+		After:  entry.Type(),
+	}
 }
 
 func (f *File) HasContent() bool {

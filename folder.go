@@ -10,11 +10,13 @@ import (
 type Folder struct {
 	// FileInfo might be handy
 	_entries map[string]FolderEntry
+	mode     os.FileMode
 }
 
 func NewFolder() *Folder {
 	return &Folder{
 		_entries: map[string]FolderEntry{},
+		mode:     0777,
 	}
 }
 
@@ -83,7 +85,10 @@ func (f *Folder) File(name string, content ...FileOptions) *File {
 }
 
 func (f *Folder) FileString(name string, content string) *File {
-	file := NewFile(FileOptions{Content: []byte(content)})
+	file := NewFile(FileOptions{
+		Content: []byte(content),
+		Mode:    0666,
+	})
 	f._entries[name] = file
 	return file
 }
@@ -122,7 +127,10 @@ func (f *Folder) Strings(prefix string) []string {
 }
 
 func (f *Folder) WriteTo(location string) error {
-	err := os.Mkdir(location, 0755)
+	if f.mode == 0 {
+		panic("OMG")
+	}
+	err := os.Mkdir(location, f.mode) // TODO: mode
 	if err != nil {
 		return err
 	}
@@ -153,7 +161,11 @@ func (f *Folder) ReadFrom(path string) error {
 			if err != nil {
 				return err
 			}
-			f.File(entry.Name(), FileOptions{Content: content})
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			f.File(entry.Name(), FileOptions{Content: content, Mode: info.Mode()})
 		}
 	}
 
@@ -166,6 +178,11 @@ func (f *Folder) Type() FolderEntryType {
 
 func (f *Folder) Equal(entry FolderEntry) bool {
 	return false
+}
+
+func (f *Folder) EqualWithReason(entry FolderEntry) (bool, Reason) {
+	// TODO: deal with MODE
+	return false, Reason{}
 }
 
 func (f *Folder) HasContent() bool {

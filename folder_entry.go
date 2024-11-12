@@ -17,6 +17,7 @@ type FolderEntry interface {
 	CreateOperation(relativePath string) Operation
 	Type() FolderEntryType
 	Equal(FolderEntry) bool
+	EqualWithReason(FolderEntry) (bool, Reason)
 	HasContent() bool
 	Content() []byte
 	ContentString() string
