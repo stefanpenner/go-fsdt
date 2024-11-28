@@ -2,7 +2,7 @@
 
 **A File System Diffing Toolchain**
 
-`go-fs-diff` is a reimagined Go implementation of several Node.js libraries,
+`go-fsdt` is a reimagined Go implementation of several Node.js libraries,
 offering powerful tools for comparing file systems, deriving minimal IO
 operations, and managing file system fixtures.
 
