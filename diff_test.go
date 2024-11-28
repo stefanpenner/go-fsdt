@@ -7,14 +7,17 @@ import (
 )
 
 func TestDiffStuffEmpty(t *testing.T) {
+	assert := assert.New(t)
+
 	a := NewFolder()
 	b := NewFolder()
 	Nothing := []Operation{}
 
-	assert.Equal(t, Nothing, a.Diff(b))
+	assert.Equal(Nothing, a.Diff(b))
 }
 
 func TestDiffWithDifferentCase(t *testing.T) {
+	assert := assert.New(t)
 	// basically, we are case sensitive for now.
 	// TODO: handle case insensitivity, including Apples default approach.
 	// were files can be store case sensitively, but are resolved case
@@ -42,20 +45,22 @@ func TestDiffWithDifferentCase(t *testing.T) {
 	b.FileString("keep.md", "## HI\n")
 
 	// case sensitive
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewUnlink("README.md"),
 		NewUnlink("a.md"),
 		NewCreate("b.md"),
 		NewCreate("readme.md"),
 	}, a.Diff(b))
 
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewUnlink("a.md"),
 		NewCreate("b.md"),
 	}, a.CaseInsensitiveDiff(b))
 }
 
 func TestDiffStuffAWithEmptyB(t *testing.T) {
+	assert := assert.New(t)
+
 	a := NewFolder()
 	b := NewFolder()
 
@@ -65,7 +70,7 @@ func TestDiffStuffAWithEmptyB(t *testing.T) {
 	a.Folder("lib", func(f *Folder) {})
 	a.Folder("apple", func(f *Folder) {})
 
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewUnlink("BUILD.bazel"),
 		NewUnlink("README.md"),
 		NewRmdir("apple"),
@@ -74,6 +79,8 @@ func TestDiffStuffAWithEmptyB(t *testing.T) {
 }
 
 func TestDiffStuffBWithEmptyA(t *testing.T) {
+	assert := assert.New(t)
+
 	a := NewFolder()
 	b := NewFolder()
 
@@ -82,7 +89,7 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	b.Folder("lib")
 	b.Folder("apple")
 
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewCreate("BUILD.bazel"),
 		NewCreate("README.md"),
 		NewMkdir("apple"),
@@ -91,6 +98,8 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 }
 
 func TestDiffStuffWithOverlap(t *testing.T) {
+	assert := assert.New(t)
+
 	a := NewFolder()
 	b := NewFolder()
 
@@ -112,7 +121,7 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 	a.Folder("lib")
 	// lib is not in b
 
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewUnlink("BUILD.bazel"),
 		NewRmdir("lib"),
 		NewCreate("notes.txt"),
@@ -121,13 +130,15 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 }
 
 func TestWithContentDifferences(t *testing.T) {
+	assert := assert.New(t)
+
 	a := NewFolder()
 	b := NewFolder()
 
 	a.FileString("README.md", "## HI\n")
 	b.FileString("README.md", "## Bye\n")
 
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewChangeFile("README.md", Reason{
 			Type:   ContentChanged,
 			Before: []byte("## HI\n"),
@@ -137,6 +148,8 @@ func TestWithContentDifferences(t *testing.T) {
 }
 
 func TestDiffWithDepth(t *testing.T) {
+	assert := assert.New(t)
+
 	a := NewFolder()
 	b := NewFolder()
 
@@ -156,7 +169,7 @@ func TestDiffWithDepth(t *testing.T) {
 		})
 	})
 
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewChangeFolder("foo",
 			NewUnlink("README.md"),
 			NewCreate("_README.md"),
@@ -167,8 +180,11 @@ func TestDiffWithDepth(t *testing.T) {
 }
 
 func TestDiffWithDepthAndContent(t *testing.T) {
+	assert := assert.New(t)
+
 	a := NewFolder()
 	b := NewFolder()
+
 	a.Folder("foo", func(f *Folder) {
 		f.FileString("README.md", "## HI\n")
 		f.Folder("bar", func(f *Folder) {
@@ -185,7 +201,7 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 		})
 	})
 
-	assert.Equal(t, []Operation{
+	assert.Equal([]Operation{
 		NewChangeFolder("foo",
 			NewChangeFile("README.md", Reason{
 				Type:   ContentChanged,

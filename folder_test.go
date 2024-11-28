@@ -67,6 +67,7 @@ func TestFolderMode(t *testing.T) {
 }
 
 func TestFolderStrings(t *testing.T) {
+	assert := assert.New(t)
 	folder := NewFolder()
 	folder.FileString("README.md", "## HI\n")
 	folder.Folder("lib", func(f *Folder) {
@@ -78,9 +79,9 @@ func TestFolderStrings(t *testing.T) {
 		f.FileString("lib.go", "package lib\n")
 	})
 
-	assert.Equal(t, []string{"README.md", "lib/", "lib/foo/", "lib/foo/bar/", "lib/foo/bar/baz.go", "lib/lib.go"}, folder.Strings(""))
-	assert.Equal(t, []string{"root/", "root/README.md", "root/lib/", "root/lib/foo/", "root/lib/foo/bar/", "root/lib/foo/bar/baz.go", "root/lib/lib.go"}, folder.Strings("root"))
-	assert.Equal(t, []string{"/root/", "/root/README.md", "/root/lib/", "/root/lib/foo/", "/root/lib/foo/bar/", "/root/lib/foo/bar/baz.go", "/root/lib/lib.go"}, folder.Strings("/root"))
+	assert.Equal([]string{"README.md", "lib/", "lib/foo/", "lib/foo/bar/", "lib/foo/bar/baz.go", "lib/lib.go"}, folder.Strings(""))
+	assert.Equal([]string{"root/", "root/README.md", "root/lib/", "root/lib/foo/", "root/lib/foo/bar/", "root/lib/foo/bar/baz.go", "root/lib/lib.go"}, folder.Strings("root"))
+	assert.Equal([]string{"/root/", "/root/README.md", "/root/lib/", "/root/lib/foo/", "/root/lib/foo/bar/", "/root/lib/foo/bar/baz.go", "/root/lib/lib.go"}, folder.Strings("/root"))
 }
 
 func TestFolderToDirAndBack(t *testing.T) {
@@ -105,15 +106,17 @@ func TestFolderToDirAndBack(t *testing.T) {
 	}
 
 	t.Run("check the raw disk", func(t *testing.T) {
-		assert.Equal(t, []string{"folder"}, dir(tempDir), "has files")
-		assert.Equal(t, []string{"README.md", "lib"}, dir(folderRoot))
-		assert.Equal(t, []string{"foo", "lib.go"}, dir(folderRoot+"/lib"))
-		assert.Equal(t, []string{"bar"}, dir(folderRoot+"/lib/foo"))
-		assert.Equal(t, []string{"baz.go"}, dir(folderRoot+"/lib/foo/bar"))
+		assert := assert.New(t)
 
-		assert.Equal(t, "## HI\n", readString(folderRoot+"/README.md"))
-		assert.Equal(t, "package lib\n", readString(folderRoot+"/lib/lib.go"))
-		assert.Equal(t, "package baz\n", readString(folderRoot+"/lib/foo/bar/baz.go"))
+		assert.Equal([]string{"folder"}, dir(tempDir), "has files")
+		assert.Equal([]string{"README.md", "lib"}, dir(folderRoot))
+		assert.Equal([]string{"foo", "lib.go"}, dir(folderRoot+"/lib"))
+		assert.Equal([]string{"bar"}, dir(folderRoot+"/lib/foo"))
+		assert.Equal([]string{"baz.go"}, dir(folderRoot+"/lib/foo/bar"))
+
+		assert.Equal("## HI\n", readString(folderRoot+"/README.md"))
+		assert.Equal("package lib\n", readString(folderRoot+"/lib/lib.go"))
+		assert.Equal("package baz\n", readString(folderRoot+"/lib/foo/bar/baz.go"))
 	})
 
 	t.Run("check if we can populate a folder from disk", func(t *testing.T) {
@@ -143,6 +146,7 @@ func TestBasicFolderStuff(t *testing.T) {
 	bar := foo.Get("bar").(*Folder)
 
 	t.Run("folder scenarios", func(t *testing.T) {
+		assert := assert.New(t)
 		folderScenarios := []struct {
 			description string
 			expected    []string
@@ -154,11 +158,12 @@ func TestBasicFolderStuff(t *testing.T) {
 			{"bar.Entries()", []string{"baz.go"}, bar.Entries()},
 		}
 		for _, s := range folderScenarios {
-			assert.Equal(t, s.expected, s.actual, s.description)
+			assert.Equal(s.expected, s.actual, s.description)
 		}
 	})
 
 	t.Run("file Scenarios", func(t *testing.T) {
+		assert := assert.New(t)
 		baz := bar.Get("baz.go").(*File)
 		fileScenerios := []struct {
 			description string
@@ -169,7 +174,7 @@ func TestBasicFolderStuff(t *testing.T) {
 			{description: "README.md", expected: "## HI\n", actual: string(readme.Content())},
 		}
 		for _, s := range fileScenerios {
-			assert.Equal(t, s.expected, s.actual, s.description)
+			assert.Equal(s.expected, s.actual, s.description)
 		}
 	})
 }
@@ -222,14 +227,16 @@ func BenchmarkFolderEntries(b *testing.B) {
 }
 
 func TestFolderEntryType(t *testing.T) {
+	assert := assert.New(t)
 	a := NewFolder()
 	b := NewFile()
 
-	assert.Equal(t, FOLDER, a.Type())
-	assert.Equal(t, FILE, b.Type())
+	assert.Equal(FOLDER, a.Type())
+	assert.Equal(FILE, b.Type())
 }
 
 func TestCreateChildOperation(t *testing.T) {
+	assert := assert.New(t)
 	a := NewFolder()
 	a.FileString("README.md", "## HI\n")
 	a.Folder("a", func(f *Folder) {
@@ -238,11 +245,12 @@ func TestCreateChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(t, NewCreate("README.md"), a.CreateChildOperation("README.md"))
-	assert.Equal(t, NewMkdir("a", NewMkdir("b", NewCreate("c"))), a.CreateChildOperation("a"))
+	assert.Equal(NewCreate("README.md"), a.CreateChildOperation("README.md"))
+	assert.Equal(NewMkdir("a", NewMkdir("b", NewCreate("c"))), a.CreateChildOperation("a"))
 }
 
 func TestRemoveChildOperation(t *testing.T) {
+	assert := assert.New(t)
 	a := NewFolder()
 	a.FileString("README.md", "## HI\n")
 	a.Folder("a", func(f *Folder) {
@@ -251,8 +259,8 @@ func TestRemoveChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(t, NewUnlink("README.md"), a.RemoveChildOperation("README.md"))
-	assert.Equal(t, NewRmdir("a", NewRmdir("b", NewUnlink("c"))), a.RemoveChildOperation("a"))
+	assert.Equal(NewUnlink("README.md"), a.RemoveChildOperation("README.md"))
+	assert.Equal(NewRmdir("a", NewRmdir("b", NewUnlink("c"))), a.RemoveChildOperation("a"))
 }
 
 func TestReadmeExample(t *testing.T) {
