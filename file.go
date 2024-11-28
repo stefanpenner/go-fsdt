@@ -6,16 +6,17 @@ import (
 )
 
 type File struct {
-	// FileInfo might be handy
+	// TODO: FileInfo might be handy
 	content []byte
 	mode    os.FileMode
-	// encoding string
 }
 
 type FileOptions struct {
 	Content []byte
 	Mode    os.FileMode
 }
+
+var DEFAULT_FILE_MODE = os.FileMode(0644)
 
 func NewFileString(content string) *File {
 	return NewFile(FileOptions{Content: []byte(content)})
@@ -25,19 +26,17 @@ func NewFile(content ...FileOptions) *File {
 	if len(content) == 0 {
 		return &File{
 			content: []byte{},
-			mode:    0666,
-			// encoding: "utf-8",
+			mode:    DEFAULT_FILE_MODE,
 		}
 	}
 
 	mode := content[0].Mode
-	if mode == 0 {
-		panic("OMG")
+	if mode <= 0 {
+		mode = DEFAULT_FILE_MODE
 	}
 	return &File{
 		content: content[0].Content,
 		mode:    mode,
-		// encoding: "utf-8",
 	}
 }
 
@@ -48,7 +47,7 @@ func (f *File) Strings(prefix string) []string {
 func (f *File) Clone() FolderEntry {
 	return &File{
 		content: append([]byte(nil), f.content...),
-		// encoding: f.encoding,
+		mode:    f.mode,
 	}
 }
 

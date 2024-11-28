@@ -1,6 +1,6 @@
 package fs
 
-// let's ensure we handle multiple encodings, images, text encodings, binary etc.
+// let's ensure we handle images, text encodings, binary etc.
 // let's ensure we handle symlinks, hardlinks and stuff
 import (
 	"encoding/json"
@@ -44,6 +44,26 @@ func read(root string) []byte {
 
 func readString(root string) string {
 	return string(read(root))
+}
+
+func TestFolderMode(t *testing.T) {
+	assert := assert.New(t)
+
+	folder := NewFolder()
+
+	assert.Equal(folder.Mode(), os.FileMode(os.ModeDir|0755))
+	assert.Equal(folder.Mode().Perm(), os.FileMode(0755))
+	tempdir := t.TempDir()
+
+	folder.WriteTo(tempdir + "/foo/")
+
+	stat, err := os.Stat(tempdir + "/foo")
+	if err != nil {
+		panic(err)
+	}
+
+	assert.Equal(os.FileMode(os.ModeDir|0755), stat.Mode())
+	assert.Equal(os.FileMode(0755), stat.Mode().Perm())
 }
 
 func TestFolderStrings(t *testing.T) {
@@ -238,6 +258,7 @@ func TestRemoveChildOperation(t *testing.T) {
 func TestReadmeExample(t *testing.T) {
 	assert := assert.New(t)
 	tempDir := t.TempDir()
+
 	// create a new folder, in memory
 	folder := NewFolder()
 
@@ -247,7 +268,6 @@ func TestReadmeExample(t *testing.T) {
 	// add a file, with the content of a []byte{} and other more advanced options
 	readme_two := folder.File("README_two.md", FileOptions{
 		Content: []byte("## h1 \n"),
-		Mode:    0666,
 	})
 
 	// create lib/Empty.txt
@@ -277,6 +297,9 @@ func TestReadmeExample(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+
+	// comparision to self should yield nothing
+	assert.Equal([]Operation{}, folder.Diff(folder))
 
 	// let's compare the two, but they are the same so it's boring
 	assert.ElementsMatch([]Operation{}, newFolder.Diff(folder))
