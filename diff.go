@@ -17,9 +17,9 @@ const (
 )
 
 type Reason struct {
-	Type   ReasonType
 	Before interface{}
 	After  interface{}
+	Type   ReasonType
 }
 
 // TODDO: expand reason from enum, to struct (before / after)
