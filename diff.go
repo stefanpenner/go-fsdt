@@ -16,9 +16,27 @@ const (
 	ChangeFolder Operand = "ChangeDir"
 )
 
+type Reason struct {
+	Type   ReasonType
+	Before interface{}
+	After  interface{}
+}
+
+// TODDO: expand reason from enum, to struct (before / after)
+type ReasonType string
+
+const (
+	TypeChanged    ReasonType = "Type Changed"
+	ModeChanged    ReasonType = "Mode Changed"
+	ContentChanged ReasonType = "Content Changed"
+	Missing        ReasonType = "Missing"
+	Because        ReasonType = "because"
+)
+
 type Operation struct {
 	RelativePath string
 	Operand      Operand
+	Reason       Reason
 	Operations   []Operation
 }
 
@@ -90,11 +108,12 @@ func Diff(a, b *Folder, caseSensitive bool) []Operation {
 					updates = append(updates, NewChangeFolder(a_key, operations...))
 				}
 			} else if a_type == FILE {
-				if a_entry.Equal(b_entry) {
+				equal, reason := a_entry.EqualWithReason(b_entry)
+				if equal {
 					// they are equal files, so do nothing..
 				} else {
 					// they are different then so we add a change operation
-					updates = append(updates, NewChangeFile(b_key))
+					updates = append(updates, NewChangeFile(b_key, reason))
 				}
 			} else {
 				panic("fsdt/diff.go(unreachable)")
@@ -156,8 +175,8 @@ func NewCreate(relativePath string) Operation {
 	return Operation{Operand: Create, RelativePath: relativePath}
 }
 
-func NewChangeFile(relativePath string) Operation {
-	return Operation{Operand: ChangeFile, RelativePath: relativePath}
+func NewChangeFile(relativePath string, reason Reason) Operation {
+	return Operation{Operand: ChangeFile, RelativePath: relativePath, Reason: reason}
 }
 
 func NewChangeFolder(relativePath string, operations ...Operation) Operation {

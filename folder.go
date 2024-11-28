@@ -10,11 +10,15 @@ import (
 type Folder struct {
 	// FileInfo might be handy
 	_entries map[string]FolderEntry
+	mode     os.FileMode
 }
+
+var DEFAULT_FOLDER_MODE = os.FileMode(os.ModeDir | 0755)
 
 func NewFolder() *Folder {
 	return &Folder{
 		_entries: map[string]FolderEntry{},
+		mode:     DEFAULT_FOLDER_MODE,
 	}
 }
 
@@ -27,6 +31,10 @@ func (f *Folder) Entries() []string {
 	// hopefully a lexigraphic sort
 	sort.Strings(entries)
 	return entries
+}
+
+func (f *Folder) Mode() os.FileMode {
+	return f.mode
 }
 
 func (f *Folder) RemoveOperation(relativePath string) Operation {
@@ -83,7 +91,10 @@ func (f *Folder) File(name string, content ...FileOptions) *File {
 }
 
 func (f *Folder) FileString(name string, content string) *File {
-	file := NewFile(FileOptions{Content: []byte(content)})
+	file := NewFile(FileOptions{
+		Content: []byte(content),
+		Mode:    DEFAULT_FILE_MODE,
+	})
 	f._entries[name] = file
 	return file
 }
@@ -122,7 +133,7 @@ func (f *Folder) Strings(prefix string) []string {
 }
 
 func (f *Folder) WriteTo(location string) error {
-	err := os.Mkdir(location, 0755)
+	err := os.Mkdir(location, f.mode.Perm())
 	if err != nil {
 		return err
 	}
@@ -153,7 +164,14 @@ func (f *Folder) ReadFrom(path string) error {
 			if err != nil {
 				return err
 			}
-			f.File(entry.Name(), FileOptions{Content: content})
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			f.File(entry.Name(), FileOptions{
+				Content: content,
+				Mode:    info.Mode(),
+			})
 		}
 	}
 
@@ -166,6 +184,11 @@ func (f *Folder) Type() FolderEntryType {
 
 func (f *Folder) Equal(entry FolderEntry) bool {
 	return false
+}
+
+func (f *Folder) EqualWithReason(entry FolderEntry) (bool, Reason) {
+	// TODO: deal with MODE
+	return false, Reason{}
 }
 
 func (f *Folder) HasContent() bool {

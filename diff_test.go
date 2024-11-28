@@ -128,7 +128,11 @@ func TestWithContentDifferences(t *testing.T) {
 	b.FileString("README.md", "## Bye\n")
 
 	assert.Equal(t, []Operation{
-		NewChangeFile("README.md"),
+		NewChangeFile("README.md", Reason{
+			Type:   ContentChanged,
+			Before: []byte("## HI\n"),
+			After:  []byte("## Bye\n"),
+		}),
 	}, a.Diff(b))
 }
 
@@ -183,10 +187,18 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 
 	assert.Equal(t, []Operation{
 		NewChangeFolder("foo",
-			NewChangeFile("README.md"),
+			NewChangeFile("README.md", Reason{
+				Type:   ContentChanged,
+				Before: []byte("## HI\n"),
+				After:  []byte("## BYE\n"),
+			}),
 			NewChangeFolder("bar",
 				NewUnlink("a.md"),
-				NewChangeFile("README.md"),
+				NewChangeFile("README.md", Reason{
+					Type:   ContentChanged,
+					Before: []byte("## HI\n"),
+					After:  []byte("## BYE\n"),
+				}),
 				NewCreate("b.md"),
 			),
 		),
