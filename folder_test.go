@@ -1,4 +1,4 @@
-package fs
+package fsdt
 
 // let's ensure we handle images, text encodings, binary etc.
 // let's ensure we handle symlinks, hardlinks and stuff

@@ -1,4 +1,4 @@
-package fs
+package fsdt
 
 // Define a custom type for FolderEntryType
 type FolderEntryType string
