@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	op "github.com/stefanpenner/go-fsdt/operation"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -245,8 +246,12 @@ func TestCreateChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(NewCreate("README.md"), a.CreateChildOperation("README.md"))
-	assert.Equal(NewMkdir("a", NewMkdir("b", NewCreate("c"))), a.CreateChildOperation("a"))
+	assert.Equal(op.NewFileOperation("README.md"), a.CreateChildOperation("README.md"))
+	assert.Equal(op.NewMkdirOperation("a",
+		op.NewMkdirOperation("b",
+			op.NewFileOperation("c"),
+		),
+	), a.CreateChildOperation("a"))
 }
 
 func TestRemoveChildOperation(t *testing.T) {
@@ -259,8 +264,12 @@ func TestRemoveChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(NewUnlink("README.md"), a.RemoveChildOperation("README.md"))
-	assert.Equal(NewRmdir("a", NewRmdir("b", NewUnlink("c"))), a.RemoveChildOperation("a"))
+	assert.Equal(op.NewUnlink("README.md"), a.RemoveChildOperation("README.md"))
+	assert.Equal(op.NewRmdir("a",
+		op.NewRmdir("b",
+			op.NewUnlink("c"),
+		),
+	), a.RemoveChildOperation("a"))
 }
 
 func TestReadmeExample(t *testing.T) {
@@ -307,17 +316,17 @@ func TestReadmeExample(t *testing.T) {
 	}
 
 	// comparision to self should yield nothing
-	assert.Equal([]Operation{}, folder.Diff(folder))
+	assert.Equal([]op.Operation{}, folder.Diff(folder))
 
 	// let's compare the two, but they are the same so it's boring
-	assert.ElementsMatch([]Operation{}, newFolder.Diff(folder))
+	assert.ElementsMatch([]op.Operation{}, newFolder.Diff(folder))
 
 	// // we can also create a new folder via clone
 	clone := folder.Clone().(*Folder)
 
 	// let's compare the two, but they are the same so it's boring
-	assert.Equal([]Operation{}, folder.Diff(clone))
-	assert.Equal([]Operation{}, newFolder.Diff(clone))
+	assert.Equal([]op.Operation{}, folder.Diff(clone))
+	assert.Equal([]op.Operation{}, newFolder.Diff(clone))
 
 	// let's remove a folder that contains a file
 	err = folder.Remove("lib")
@@ -325,30 +334,16 @@ func TestReadmeExample(t *testing.T) {
 		panic(err)
 	}
 	// now there should be a diff
-	assert.Equal([]Operation{
-		{
-			RelativePath: "lib",
-			Operand:      Mkdir,
-			Operations: []Operation{
-				{
-					RelativePath: "Empty.txt",
-					Operand:      Create,
-				},
-			},
-		},
+	assert.Equal([]op.Operation{
+		op.NewMkdirOperation("lib",
+			op.NewFileOperation("Empty.txt"),
+		),
 	}, folder.Diff(clone))
 
 	// now there should be a diff (Reverse)
-	assert.Equal([]Operation{
-		{
-			RelativePath: "lib",
-			Operand:      Rmdir,
-			Operations: []Operation{
-				{
-					RelativePath: "Empty.txt",
-					Operand:      Unlink,
-				},
-			},
-		},
+	assert.Equal([]op.Operation{
+		op.NewRmdir("lib",
+			op.NewUnlink("Empty.txt"),
+		),
 	}, clone.Diff(folder))
 }

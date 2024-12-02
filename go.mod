@@ -1,4 +1,4 @@
-module github.com/stefanpenner/go-fs-diff
+module github.com/stefanpenner/go-fsdt
 
 go 1.23.3
 

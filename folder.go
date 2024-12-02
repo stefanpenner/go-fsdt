@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	op "github.com/stefanpenner/go-fsdt/operation"
 )
 
 type Folder struct {
@@ -37,13 +39,13 @@ func (f *Folder) Mode() os.FileMode {
 	return f.mode
 }
 
-func (f *Folder) RemoveOperation(relativePath string) Operation {
-	operations := []Operation{}
+func (f *Folder) RemoveOperation(relativePath string) op.Operation {
+	operations := []op.Operation{}
 	for _, relativePath := range f.Entries() {
 		entry := f._entries[relativePath]
 		operations = append(operations, entry.RemoveOperation(relativePath))
 	}
-	return NewRmdir(relativePath, operations...)
+	return op.NewRmdir(relativePath, operations...)
 }
 
 func (f *Folder) Get(relativePath string) FolderEntry {
@@ -65,22 +67,22 @@ func (f *Folder) Remove(relativePath string) error {
 	}
 }
 
-func (f *Folder) RemoveChildOperation(relativePath string) Operation {
+func (f *Folder) RemoveChildOperation(relativePath string) op.Operation {
 	return f.Get(relativePath).RemoveOperation(relativePath)
 }
 
-func (f *Folder) CreateOperation(relativePath string) Operation {
-	operations := []Operation{}
+func (f *Folder) CreateOperation(relativePath string) op.Operation {
+	operations := []op.Operation{}
 
 	for _, relativePath := range f.Entries() {
 		entry := f._entries[relativePath]
 		operations = append(operations, entry.CreateOperation(relativePath))
 	}
 
-	return NewMkdir(relativePath, operations...)
+	return op.NewMkdirOperation(relativePath, operations...)
 }
 
-func (f *Folder) CreateChildOperation(relativePath string) Operation {
+func (f *Folder) CreateChildOperation(relativePath string) op.Operation {
 	return f.Get(relativePath).CreateOperation(relativePath)
 }
 
@@ -106,6 +108,18 @@ func (f *Folder) Folder(name string, cb ...func(*Folder)) *Folder {
 		cb(folder)
 	}
 	return folder
+}
+
+func (f *Folder) Symlink(name string, target string) *Link {
+	symlink := NewLink(target, SYMLINK)
+	f._entries[name] = symlink
+	return symlink
+}
+
+func (f *Folder) Hardlink(name string, target string) *Link {
+	hardlink := NewLink(target, HARDLINK)
+	f._entries[name] = hardlink
+	return hardlink
 }
 
 func (f *Folder) Clone() FolderEntry {
@@ -186,9 +200,9 @@ func (f *Folder) Equal(entry FolderEntry) bool {
 	return false
 }
 
-func (f *Folder) EqualWithReason(entry FolderEntry) (bool, Reason) {
+func (f *Folder) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
 	// TODO: deal with MODE
-	return false, Reason{}
+	return false, op.Reason{}
 }
 
 func (f *Folder) HasContent() bool {
@@ -199,11 +213,11 @@ func (f *Folder) Content() []byte {
 	return []byte{}
 }
 
-func (f *Folder) Diff(b *Folder) []Operation {
+func (f *Folder) Diff(b *Folder) []op.Operation {
 	return Diff(f, b, true)
 }
 
-func (f *Folder) CaseInsensitiveDiff(b *Folder) []Operation {
+func (f *Folder) CaseInsensitiveDiff(b *Folder) []op.Operation {
 	return Diff(f, b, false)
 }
 
