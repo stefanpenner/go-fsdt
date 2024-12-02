@@ -26,11 +26,6 @@ func TestSymlink(t *testing.T) {
 		assert.Equal(SYMLINK, link_to_folder.Type())
 		assert.Equal(link_to_folder, folder.Get("link_to_folder"))
 		assert.Equal("target_folder", link_to_folder.Target())
-	})
-
-	t.Run("error cases", func(t *testing.T) {
-		assert := assert.New(t)
-		folder := folder.Clone().(*Folder)
 
 		broken_link := folder.Symlink("broken_link", "nowhere")
 		assert.Equal(broken_link, folder.Get("broken_link"))
@@ -40,10 +35,100 @@ func TestSymlink(t *testing.T) {
 		assert.Equal(outside_link, folder.Get("outside_link"))
 		assert.Equal(SYMLINK, outside_link.Type())
 
-		// Test cyclic reference
 		cyclic_link := folder.Symlink("cyclic_link", ".")
 		assert.Equal(cyclic_link, folder.Get("cyclic_link"))
 		assert.Equal(SYMLINK, cyclic_link.Type())
+	})
+
+	t.Run("Equal", func(t *testing.T) {
+		assert := assert.New(t)
+		symlink := folder.Symlink("from", "to")
+		hardlink := folder.Hardlink("other", "to")
+		other := folder.Symlink("from", "to")
+		a := folder.Symlink("from", "not-to")
+		b := folder.Symlink("not-from", "from")
+		c := folder.Symlink("other", "from")
+
+		assert.False(symlink.Equal(hardlink))
+		assert.True(symlink.Equal(symlink))
+		assert.True(symlink.Equal(symlink.Clone()))
+		assert.True(symlink.Equal(other))
+		assert.False(symlink.Equal(a))
+		assert.False(symlink.Equal(b))
+		assert.True(b.Equal(c))
+	})
+
+	t.Run("EqualWithReason", func(t *testing.T) {
+		t.Run("symlink", func(t *testing.T) {
+			assert := assert.New(t)
+			symlink := folder.Symlink("from", "to")
+			hardlink := folder.Hardlink("other", "to")
+			other := folder.Symlink("from", "to")
+			a := folder.Symlink("from", "not-to")
+			b := folder.Symlink("not-from", "from")
+			c := folder.Symlink("other", "from")
+
+			equal, reason := symlink.EqualWithReason(hardlink)
+			assert.False(equal)
+			assert.Equal(Reason{Type: ContentChanged, Before: SYMLINK, After: HARDLINK}, reason)
+
+			equal, reason = symlink.EqualWithReason(symlink)
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+
+			equal, reason = symlink.EqualWithReason(symlink.Clone())
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+
+			equal, reason = symlink.EqualWithReason(other)
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+
+			equal, reason = symlink.EqualWithReason(a)
+			assert.False(equal)
+			assert.Equal(Reason{Type: ContentChanged, Before: "to", After: "not-to"}, reason)
+
+			equal, reason = symlink.EqualWithReason(b)
+			assert.False(equal)
+			assert.Equal(Reason{Type: ContentChanged, Before: "to", After: "from"}, reason)
+
+			equal, reason = b.EqualWithReason(c)
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+		})
+
+		t.Run("hardlink", func(t *testing.T) {
+			assert := assert.New(t)
+			hardlink := folder.Hardlink("link1", "original_file")
+			symlink := folder.Symlink("other", "original_file")
+			other := folder.Hardlink("link2", "original_file")
+			differentTarget := folder.Hardlink("link3", "other_file")
+			sameTarget := folder.Hardlink("link4", "original_file")
+
+			equal, reason := hardlink.EqualWithReason(symlink)
+			assert.False(equal)
+			assert.Equal(Reason{Type: ContentChanged, Before: HARDLINK, After: SYMLINK}, reason)
+
+			equal, reason = hardlink.EqualWithReason(hardlink)
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+
+			equal, reason = hardlink.EqualWithReason(hardlink.Clone())
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+
+			equal, reason = hardlink.EqualWithReason(other)
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+
+			equal, reason = hardlink.EqualWithReason(differentTarget)
+			assert.False(equal)
+			assert.Equal(Reason{Type: ContentChanged, Before: "original_file", After: "other_file"}, reason)
+
+			equal, reason = hardlink.EqualWithReason(sameTarget)
+			assert.True(equal)
+			assert.Equal(Reason{}, reason)
+		})
 	})
 
 	// TODO: implement
@@ -95,20 +180,6 @@ func TestHardlink(t *testing.T) {
 
 		// TODO: should we support this?
 		// assert.Equal("hello world", hard_link.GetContent())
-	})
-
-	t.Run("error cases", func(t *testing.T) {
-		// assert := assert.New(t)
-
-		folder := folder.Clone().(*Folder)
-		broken_link := folder.Hardlink("broken_link", "nowhere")
-		some_dir := folder.Folder("some_dir")
-		dir_link := folder.Hardlink("dir_link", "some_dir")
-		outside_link := folder.Hardlink("outside_link", "../somewhere-else")
-
-		_, _, _, _ = broken_link, some_dir, dir_link, outside_link
-
-		// TODO: more
 	})
 
 	// TODO:  do this

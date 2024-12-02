@@ -39,21 +39,27 @@ func TestDiffWithDifferentCase(t *testing.T) {
 	a.FileString("README.md", "## HI\n")
 	a.FileString("a.md", "## HI\n")
 	a.FileString("keep.md", "## HI\n")
+	a.Symlink("b.md", "a.md")
 
 	b.FileString("readme.md", "## HI\n")
 	b.FileString("b.md", "## HI\n")
 	b.FileString("keep.md", "## HI\n")
+	b.Symlink("B.md", "b.md")
 
 	// case sensitive
 	assert.Equal([]Operation{
+		{Operand: CreateLink, RelativePath: "B.md"}, // TODO: make helper
 		NewUnlink("README.md"),
 		NewUnlink("a.md"),
+		NewUnlink("b.md"),
 		NewCreate("b.md"),
 		NewCreate("readme.md"),
 	}, a.Diff(b))
 
 	assert.Equal([]Operation{
+		{Operand: CreateLink, RelativePath: "B.md"}, // TODO: make helper
 		NewUnlink("a.md"),
+		NewUnlink("b.md"),
 		NewCreate("b.md"),
 	}, a.CaseInsensitiveDiff(b))
 }
@@ -69,11 +75,15 @@ func TestDiffStuffAWithEmptyB(t *testing.T) {
 	a.Folder("apple", func(f *Folder) {})
 	a.Folder("lib", func(f *Folder) {})
 	a.Folder("apple", func(f *Folder) {})
+	a.Symlink("a", "apple")
+	a.Hardlink("b", "apple")
 
 	assert.Equal([]Operation{
 		NewUnlink("BUILD.bazel"),
 		NewUnlink("README.md"),
+		NewUnlink("a"),
 		NewRmdir("apple"),
+		NewUnlink("b"),
 		NewRmdir("lib"),
 	}, a.Diff(b))
 }
@@ -88,11 +98,15 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	b.FileString("BUILD.bazel", "## HI\n")
 	b.Folder("lib")
 	b.Folder("apple")
+	b.Symlink("a", "apple")
+	b.Hardlink("b", "apple")
 
 	assert.Equal([]Operation{
 		NewCreate("BUILD.bazel"),
 		NewCreate("README.md"),
+		{Operand: CreateLink, RelativePath: "a"}, // TODO: creat helper
 		NewMkdir("apple"),
+		{Operand: CreateLink, RelativePath: "b"}, // TODO: creat helper
 		NewMkdir("lib"),
 	}, a.Diff(b))
 }
@@ -105,6 +119,21 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 
 	a.FileString("README.md", "## HI\n")
 	b.FileString("README.md", "## HI\n")
+
+	a.Symlink("a", "somewhere")
+	b.Symlink("a", "somewhere")
+
+	a.Hardlink("b", "somewhere-else")
+	b.Hardlink("b", "somewhere-else")
+
+	a.Symlink("c", "somewhere")
+	b.Hardlink("c", "somewhere")
+
+	a.Symlink("d", "somewhere")
+	b.Symlink("d", "somewhere-else")
+
+	a.Hardlink("e", "somewhere")
+	b.Hardlink("e", "somewhere-else")
 
 	a.FileString("BUILD.bazel", "## HI\n")
 	// BUILD.bazel is not in b
@@ -123,7 +152,13 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 
 	assert.Equal([]Operation{
 		NewUnlink("BUILD.bazel"),
+		NewUnlink("c"), // TODO: needs reason, maybe needs to be "CHANGE"
+		NewUnlink("d"),
+		NewUnlink("e"),
 		NewRmdir("lib"),
+		NewCreateLink("c", HARDLINK), // TODO: needs target
+		NewCreateLink("d", SYMLINK),  // TODO: needs target
+		NewCreateLink("e", HARDLINK), // TODO: needs target
 		NewCreate("notes.txt"),
 		NewMkdir("orange"),
 	}, a.Diff(b))

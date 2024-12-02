@@ -108,14 +108,14 @@ func (f *Folder) Folder(name string, cb ...func(*Folder)) *Folder {
 	return folder
 }
 
-func (f *Folder) Symlink(name string, target string) *Symlink {
-	symlink := NewSymlink(target)
+func (f *Folder) Symlink(name string, target string) *Link {
+	symlink := NewLink(target, SYMLINK)
 	f._entries[name] = symlink
 	return symlink
 }
 
-func (f *Folder) Hardlink(name string, target string) *Hardlink {
-	hardlink := NewHardlink(target)
+func (f *Folder) Hardlink(name string, target string) *Link {
+	hardlink := NewLink(target, HARDLINK)
 	f._entries[name] = hardlink
 	return hardlink
 }

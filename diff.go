@@ -6,23 +6,17 @@ import (
 )
 
 type (
-	Operand  string
-	LinkType string
+	Operand string
 )
 
 const (
 	Unlink       Operand = "Unlink"
-	Link         Operand = "Link"
+	CreateLink   Operand = "CreateLink"
 	Rmdir        Operand = "Rmdir"
 	Mkdir        Operand = "Mkdir"
 	Create       Operand = "Create"
 	ChangeFile   Operand = "ChangeFile"
 	ChangeFolder Operand = "ChangeDir"
-)
-
-const (
-	HARD     LinkType = "hard"
-	SYMBOLIC LinkType = "symbolic"
 )
 
 type Reason struct {
@@ -124,6 +118,16 @@ func Diff(a, b *Folder, caseSensitive bool) []Operation {
 					// they are different then so we add a change operation
 					updates = append(updates, NewChangeFile(b_key, reason))
 				}
+			} else if a_type == SYMLINK || a_type == HARDLINK {
+				equal, reason := a_entry.EqualWithReason(b_entry)
+				_ = reason
+				if equal {
+					// they are equal files, so do nothing..
+				} else {
+					// they are different then so we add a change operation
+					removals = append(removals, NewUnlink(b_key))                       // TODO: reason
+					additions = append(additions, NewCreateLink(b_key, b_entry.Type())) // TODO: reason
+				}
 			} else {
 				panic("fsdt/diff.go(unreachable)")
 			}
@@ -176,13 +180,17 @@ func NewMkdir(relativePath string, operations ...Operation) Operation {
 	return handleVariadicOperation(Mkdir, relativePath, operations...)
 }
 
-func NewLink(relativePath string, target string, linkType LinkType) Operation {
-	// TODO: implement target path
-	return Operation{Operand: Link, RelativePath: relativePath}
-}
-
 func NewUnlink(relativePath string) Operation {
 	return Operation{Operand: Unlink, RelativePath: relativePath}
+}
+
+func NewCreateLink(relativePath string, link_type FolderEntryType) Operation {
+	if link_type == SYMLINK || link_type == HARDLINK {
+		// TODO: needs type, and target
+		return Operation{Operand: CreateLink, RelativePath: relativePath}
+	} else {
+		panic("cannot create NewCreateLink that isn't a symlink or hardlink") // TODO: unify and provide a good error
+	}
 }
 
 func NewCreate(relativePath string) Operation {
@@ -195,14 +203,4 @@ func NewChangeFile(relativePath string, reason Reason) Operation {
 
 func NewChangeFolder(relativePath string, operations ...Operation) Operation {
 	return Operation{Operand: ChangeFolder, RelativePath: relativePath, Operations: operations}
-}
-
-func NewCreateHardlink(relativePath string, target string) Operation {
-	// TODO: Implement
-	return Operation{}
-}
-
-func NewCreateSymlink(relativePath string, target string) Operation {
-	// TODO: Implement
-	return Operation{}
 }
