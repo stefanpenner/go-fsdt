@@ -1,5 +1,7 @@
 package fsdt
 
+import op "github.com/stefanpenner/go-fsdt/operation"
+
 // Define a custom type for FolderEntryType
 type FolderEntryType string
 
@@ -15,11 +17,12 @@ type FolderEntry interface {
 	WriteTo(location string) error
 	Clone() FolderEntry
 	Strings(prefix string) []string
-	RemoveOperation(relativePath string) Operation
-	CreateOperation(relativePath string) Operation
+	// TODO: consider all operations taking optional reason
+	RemoveOperation(relativePath string) op.Operation
+	CreateOperation(relativePath string) op.Operation
 	Type() FolderEntryType
 	Equal(FolderEntry) bool
-	EqualWithReason(FolderEntry) (bool, Reason)
+	EqualWithReason(FolderEntry) (bool, op.Reason)
 	HasContent() bool
 	Content() []byte
 	ContentString() string

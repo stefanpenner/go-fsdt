@@ -3,6 +3,7 @@ package fsdt
 import (
 	"testing"
 
+	op "github.com/stefanpenner/go-fsdt/operation"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,7 +12,7 @@ func TestDiffStuffEmpty(t *testing.T) {
 
 	a := NewFolder()
 	b := NewFolder()
-	Nothing := []Operation{}
+	Nothing := []op.Operation{}
 
 	assert.Equal(Nothing, a.Diff(b))
 }
@@ -47,20 +48,20 @@ func TestDiffWithDifferentCase(t *testing.T) {
 	b.Symlink("B.md", "b.md")
 
 	// case sensitive
-	assert.Equal([]Operation{
-		{Operand: CreateLink, RelativePath: "B.md"}, // TODO: make helper
-		NewUnlink("README.md"),
-		NewUnlink("a.md"),
-		NewUnlink("b.md"),
-		NewCreate("b.md"),
-		NewCreate("readme.md"),
+	assert.Equal([]op.Operation{
+		op.NewCreateLink("B.md", "b.md", op.SYMBOLIC_LINK),
+		op.NewUnlink("README.md"),
+		op.NewUnlink("a.md"),
+		op.NewUnlink("b.md"),
+		op.NewFileOperation("b.md"),
+		op.NewFileOperation("readme.md"),
 	}, a.Diff(b))
 
-	assert.Equal([]Operation{
-		{Operand: CreateLink, RelativePath: "B.md"}, // TODO: make helper
-		NewUnlink("a.md"),
-		NewUnlink("b.md"),
-		NewCreate("b.md"),
+	assert.Equal([]op.Operation{
+		op.NewCreateLink("B.md", "b.md", op.SYMBOLIC_LINK),
+		op.NewUnlink("a.md"),
+		op.NewUnlink("b.md"),
+		op.NewFileOperation("b.md"),
 	}, a.CaseInsensitiveDiff(b))
 }
 
@@ -78,13 +79,13 @@ func TestDiffStuffAWithEmptyB(t *testing.T) {
 	a.Symlink("a", "apple")
 	a.Hardlink("b", "apple")
 
-	assert.Equal([]Operation{
-		NewUnlink("BUILD.bazel"),
-		NewUnlink("README.md"),
-		NewUnlink("a"),
-		NewRmdir("apple"),
-		NewUnlink("b"),
-		NewRmdir("lib"),
+	assert.Equal([]op.Operation{
+		op.NewUnlink("BUILD.bazel"),
+		op.NewUnlink("README.md"),
+		op.NewUnlink("a"),
+		op.NewRmdir("apple"),
+		op.NewUnlink("b"),
+		op.NewRmdir("lib"),
 	}, a.Diff(b))
 }
 
@@ -101,13 +102,13 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	b.Symlink("a", "apple")
 	b.Hardlink("b", "apple")
 
-	assert.Equal([]Operation{
-		NewCreate("BUILD.bazel"),
-		NewCreate("README.md"),
-		{Operand: CreateLink, RelativePath: "a"}, // TODO: creat helper
-		NewMkdir("apple"),
-		{Operand: CreateLink, RelativePath: "b"}, // TODO: creat helper
-		NewMkdir("lib"),
+	assert.Equal([]op.Operation{
+		op.NewFileOperation("BUILD.bazel"),
+		op.NewFileOperation("README.md"),
+		op.NewCreateLink("a", "apple", op.SYMBOLIC_LINK),
+		op.NewMkdirOperation("apple"),
+		op.NewCreateLink("b", "apple", op.HARD_LINK),
+		op.NewMkdirOperation("lib"),
 	}, a.Diff(b))
 }
 
@@ -150,17 +151,17 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 	a.Folder("lib")
 	// lib is not in b
 
-	assert.Equal([]Operation{
-		NewUnlink("BUILD.bazel"),
-		NewUnlink("c"), // TODO: needs reason, maybe needs to be "CHANGE"
-		NewUnlink("d"),
-		NewUnlink("e"),
-		NewRmdir("lib"),
-		NewCreateLink("c", HARDLINK), // TODO: needs target
-		NewCreateLink("d", SYMLINK),  // TODO: needs target
-		NewCreateLink("e", HARDLINK), // TODO: needs target
-		NewCreate("notes.txt"),
-		NewMkdir("orange"),
+	assert.Equal([]op.Operation{
+		op.NewUnlink("BUILD.bazel"),
+		op.NewUnlink("c"), // TODO: should this include reason? Should this be a change?
+		op.NewUnlink("d"),
+		op.NewUnlink("e"),
+		op.NewRmdir("lib"),
+		op.NewCreateLink("c", "somewhere", op.HARD_LINK),
+		op.NewCreateLink("d", "somewhere-else", op.SYMBOLIC_LINK),
+		op.NewCreateLink("e", "somewhere-else", op.HARD_LINK),
+		op.NewFileOperation("notes.txt"),
+		op.NewMkdirOperation("orange"),
 	}, a.Diff(b))
 }
 
@@ -173,9 +174,9 @@ func TestWithContentDifferences(t *testing.T) {
 	a.FileString("README.md", "## HI\n")
 	b.FileString("README.md", "## Bye\n")
 
-	assert.Equal([]Operation{
-		NewChangeFile("README.md", Reason{
-			Type:   ContentChanged,
+	assert.Equal([]op.Operation{
+		op.FileChangedOperation("README.md", op.Reason{
+			Type:   op.ContentChanged,
 			Before: []byte("## HI\n"),
 			After:  []byte("## Bye\n"),
 		}),
@@ -204,12 +205,17 @@ func TestDiffWithDepth(t *testing.T) {
 		})
 	})
 
-	assert.Equal([]Operation{
-		NewChangeFolder("foo",
-			NewUnlink("README.md"),
-			NewCreate("_README.md"),
-			NewMkdir("_bar", NewCreate("_README.md"), NewCreate("_b.md")),
-			NewRmdir("bar", NewUnlink("README.md"), NewUnlink("a.md")),
+	assert.Equal([]op.Operation{
+		op.NewChangeFolderOperation("foo",
+			op.NewUnlink("README.md"),
+			op.NewFileOperation("_README.md"),
+			op.NewMkdirOperation("_bar",
+				op.NewFileOperation("_README.md"),
+				op.NewFileOperation("_b.md"),
+			),
+			op.NewRmdir("bar",
+				op.NewUnlink("README.md"),
+				op.NewUnlink("a.md")),
 		),
 	}, a.Diff(b))
 }
@@ -236,21 +242,21 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 		})
 	})
 
-	assert.Equal([]Operation{
-		NewChangeFolder("foo",
-			NewChangeFile("README.md", Reason{
-				Type:   ContentChanged,
+	assert.Equal([]op.Operation{
+		op.NewChangeFolderOperation("foo",
+			op.FileChangedOperation("README.md", op.Reason{
+				Type:   op.ContentChanged,
 				Before: []byte("## HI\n"),
 				After:  []byte("## BYE\n"),
 			}),
-			NewChangeFolder("bar",
-				NewUnlink("a.md"),
-				NewChangeFile("README.md", Reason{
-					Type:   ContentChanged,
+			op.NewChangeFolderOperation("bar",
+				op.NewUnlink("a.md"),
+				op.FileChangedOperation("README.md", op.Reason{
+					Type:   op.ContentChanged,
 					Before: []byte("## HI\n"),
 					After:  []byte("## BYE\n"),
 				}),
-				NewCreate("b.md"),
+				op.NewFileOperation("b.md"),
 			),
 		),
 	}, a.Diff(b))

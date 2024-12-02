@@ -3,6 +3,7 @@ package fsdt
 import (
 	"testing"
 
+	op "github.com/stefanpenner/go-fsdt/operation"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,31 +71,31 @@ func TestSymlink(t *testing.T) {
 
 			equal, reason := symlink.EqualWithReason(hardlink)
 			assert.False(equal)
-			assert.Equal(Reason{Type: ContentChanged, Before: SYMLINK, After: HARDLINK}, reason)
+			assert.Equal(op.Reason{Type: op.ContentChanged, Before: SYMLINK, After: HARDLINK}, reason)
 
 			equal, reason = symlink.EqualWithReason(symlink)
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 
 			equal, reason = symlink.EqualWithReason(symlink.Clone())
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 
 			equal, reason = symlink.EqualWithReason(other)
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 
 			equal, reason = symlink.EqualWithReason(a)
 			assert.False(equal)
-			assert.Equal(Reason{Type: ContentChanged, Before: "to", After: "not-to"}, reason)
+			assert.Equal(op.Reason{Type: op.ContentChanged, Before: "to", After: "not-to"}, reason)
 
 			equal, reason = symlink.EqualWithReason(b)
 			assert.False(equal)
-			assert.Equal(Reason{Type: ContentChanged, Before: "to", After: "from"}, reason)
+			assert.Equal(op.Reason{Type: op.ContentChanged, Before: "to", After: "from"}, reason)
 
 			equal, reason = b.EqualWithReason(c)
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 		})
 
 		t.Run("hardlink", func(t *testing.T) {
@@ -107,27 +108,27 @@ func TestSymlink(t *testing.T) {
 
 			equal, reason := hardlink.EqualWithReason(symlink)
 			assert.False(equal)
-			assert.Equal(Reason{Type: ContentChanged, Before: HARDLINK, After: SYMLINK}, reason)
+			assert.Equal(op.Reason{Type: op.ContentChanged, Before: HARDLINK, After: SYMLINK}, reason)
 
 			equal, reason = hardlink.EqualWithReason(hardlink)
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 
 			equal, reason = hardlink.EqualWithReason(hardlink.Clone())
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 
 			equal, reason = hardlink.EqualWithReason(other)
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 
 			equal, reason = hardlink.EqualWithReason(differentTarget)
 			assert.False(equal)
-			assert.Equal(Reason{Type: ContentChanged, Before: "original_file", After: "other_file"}, reason)
+			assert.Equal(op.Reason{Type: op.ContentChanged, Before: "original_file", After: "other_file"}, reason)
 
 			equal, reason = hardlink.EqualWithReason(sameTarget)
 			assert.True(equal)
-			assert.Equal(Reason{}, reason)
+			assert.Equal(op.Reason{}, reason)
 		})
 	})
 

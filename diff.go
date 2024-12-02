@@ -3,45 +3,9 @@ package fsdt
 import (
 	"sort"
 	"strings"
+
+	op "github.com/stefanpenner/go-fsdt/operation"
 )
-
-type (
-	Operand string
-)
-
-const (
-	Unlink       Operand = "Unlink"
-	CreateLink   Operand = "CreateLink"
-	Rmdir        Operand = "Rmdir"
-	Mkdir        Operand = "Mkdir"
-	Create       Operand = "Create"
-	ChangeFile   Operand = "ChangeFile"
-	ChangeFolder Operand = "ChangeDir"
-)
-
-type Reason struct {
-	Before interface{}
-	After  interface{}
-	Type   ReasonType
-}
-
-// TODDO: expand reason from enum, to struct (before / after)
-type ReasonType string
-
-const (
-	TypeChanged    ReasonType = "Type Changed"
-	ModeChanged    ReasonType = "Mode Changed"
-	ContentChanged ReasonType = "Content Changed"
-	Missing        ReasonType = "Missing"
-	Because        ReasonType = "because"
-)
-
-type Operation struct {
-	RelativePath string
-	Operand      Operand
-	Reason       Reason
-	Operations   []Operation
-}
 
 // Assume: a and b are the same root, compare a to b, and provide the patch
 // required to transform A to B, using the same efficient protocol as node fs-tree-diff
@@ -62,10 +26,11 @@ func sortStringsToLower(slice []string) {
 	})
 }
 
-func Diff(a, b *Folder, caseSensitive bool) []Operation {
-	updates := []Operation{}
-	additions := []Operation{}
-	removals := []Operation{}
+// TODO: provide diffing without reason, and potentially different levels of reason
+func Diff(a, b *Folder, caseSensitive bool) []op.Operation {
+	updates := []op.Operation{}
+	additions := []op.Operation{}
+	removals := []op.Operation{}
 
 	a_index := 0
 	b_index := 0
@@ -97,39 +62,23 @@ func Diff(a, b *Folder, caseSensitive bool) []Operation {
 			a_type := a_entry.Type()
 			b_type := b_entry.Type()
 
-			if a_type != b_type {
-				// if they are not the same type, easy
-				// we remove a
-				removals = append(removals, a.RemoveChildOperation(a_key))
-				// and then we add b
-				additions = append(additions, b.CreateChildOperation(b_key))
-			} else if a_type == FOLDER {
+			equal, reason := a_entry.EqualWithReason(b_entry)
+
+			if equal {
+				// to nothing!
+			} else if a_type == FOLDER && b_type == FOLDER {
+				// TODO: folder modes can change
 				// they are both folders, so we recurse
 				operations := Diff(a_entry.(*Folder), b_entry.(*Folder), caseSensitive)
 
 				if len(operations) > 0 {
-					updates = append(updates, NewChangeFolder(a_key, operations...))
+					updates = append(updates, op.NewChangeFolderOperation(a_key, operations...))
 				}
-			} else if a_type == FILE {
-				equal, reason := a_entry.EqualWithReason(b_entry)
-				if equal {
-					// they are equal files, so do nothing..
-				} else {
-					// they are different then so we add a change operation
-					updates = append(updates, NewChangeFile(b_key, reason))
-				}
-			} else if a_type == SYMLINK || a_type == HARDLINK {
-				equal, reason := a_entry.EqualWithReason(b_entry)
-				_ = reason
-				if equal {
-					// they are equal files, so do nothing..
-				} else {
-					// they are different then so we add a change operation
-					removals = append(removals, NewUnlink(b_key))                       // TODO: reason
-					additions = append(additions, NewCreateLink(b_key, b_entry.Type())) // TODO: reason
-				}
+			} else if a_type == FILE && b_type == FILE {
+				updates = append(updates, op.FileChangedOperation(b_key, reason))
 			} else {
-				panic("fsdt/diff.go(unreachable)")
+				removals = append(removals, a_entry.RemoveOperation(b_key))
+				additions = append(additions, b_entry.CreateOperation(b_key))
 			}
 
 			a_index++
@@ -163,44 +112,4 @@ func Diff(a, b *Folder, caseSensitive bool) []Operation {
 	}
 
 	return append(append(removals, updates...), additions...)
-}
-
-func handleVariadicOperation(operation Operand, relativePath string, operations ...Operation) Operation {
-	if len(operations) == 0 {
-		return Operation{Operand: operation, RelativePath: relativePath, Operations: nil}
-	}
-	return Operation{Operand: operation, RelativePath: relativePath, Operations: operations}
-}
-
-func NewRmdir(relativePath string, operations ...Operation) Operation {
-	return handleVariadicOperation(Rmdir, relativePath, operations...)
-}
-
-func NewMkdir(relativePath string, operations ...Operation) Operation {
-	return handleVariadicOperation(Mkdir, relativePath, operations...)
-}
-
-func NewUnlink(relativePath string) Operation {
-	return Operation{Operand: Unlink, RelativePath: relativePath}
-}
-
-func NewCreateLink(relativePath string, link_type FolderEntryType) Operation {
-	if link_type == SYMLINK || link_type == HARDLINK {
-		// TODO: needs type, and target
-		return Operation{Operand: CreateLink, RelativePath: relativePath}
-	} else {
-		panic("cannot create NewCreateLink that isn't a symlink or hardlink") // TODO: unify and provide a good error
-	}
-}
-
-func NewCreate(relativePath string) Operation {
-	return Operation{Operand: Create, RelativePath: relativePath}
-}
-
-func NewChangeFile(relativePath string, reason Reason) Operation {
-	return Operation{Operand: ChangeFile, RelativePath: relativePath, Reason: reason}
-}
-
-func NewChangeFolder(relativePath string, operations ...Operation) Operation {
-	return Operation{Operand: ChangeFolder, RelativePath: relativePath, Operations: operations}
 }

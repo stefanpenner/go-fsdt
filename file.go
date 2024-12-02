@@ -3,6 +3,8 @@ package fsdt
 import (
 	"bytes"
 	"os"
+
+	op "github.com/stefanpenner/go-fsdt/operation"
 )
 
 type File struct {
@@ -51,12 +53,12 @@ func (f *File) Clone() FolderEntry {
 	}
 }
 
-func (f *File) RemoveOperation(relativePath string) Operation {
-	return NewUnlink(relativePath)
+func (f *File) RemoveOperation(relativePath string) op.Operation {
+	return op.NewUnlink(relativePath)
 }
 
-func (f *File) CreateOperation(relativePath string) Operation {
-	return NewCreate(relativePath)
+func (f *File) CreateOperation(relativePath string) op.Operation {
+	return op.NewFileOperation(relativePath)
 }
 
 func (f *File) Type() FolderEntryType {
@@ -90,31 +92,31 @@ func (f *File) Equal(entry FolderEntry) bool {
 	return equal
 }
 
-func (f *File) EqualWithReason(entry FolderEntry) (bool, Reason) {
+func (f *File) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
 	file, isFile := entry.(*File)
 
 	if isFile {
 		if f.mode != file.mode {
-			return false, Reason{
-				Type:   ModeChanged,
+			return false, op.Reason{
+				Type:   op.ModeChanged,
 				Before: f.Mode(),
 				After:  file.Mode(),
 			}
 		}
 
 		if bytes.Equal(f.content, file.content) {
-			return true, Reason{}
+			return true, op.Reason{}
 		} else {
 			// TODO: maybe should show offset and first char difference
-			return false, Reason{
-				Type:   ContentChanged,
+			return false, op.Reason{
+				Type:   op.ContentChanged,
 				Before: f.content,
 				After:  file.content,
 			}
 		}
 	}
-	return false, Reason{
-		Type:   TypeChanged,
+	return false, op.Reason{
+		Type:   op.TypeChanged,
 		Before: f.Type(),
 		After:  entry.Type(),
 	}

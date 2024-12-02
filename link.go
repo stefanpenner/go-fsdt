@@ -2,6 +2,8 @@ package fsdt
 
 import (
 	"os"
+
+	op "github.com/stefanpenner/go-fsdt/operation"
 )
 
 type Link struct {
@@ -39,13 +41,23 @@ func (s *Link) Clone() FolderEntry {
 	return NewLink(s.target, s.link_type)
 }
 
-func (f *Link) RemoveOperation(relativePath string) Operation {
-	return NewUnlink(relativePath)
+func (f *Link) RemoveOperation(relativePath string) op.Operation {
+	return op.NewUnlink(relativePath)
 }
 
-func (f *Link) CreateOperation(relativePath string) Operation {
-	// TODO: implement target path, and link_type
-	return Operation{Operand: CreateLink, RelativePath: relativePath}
+func (f *Link) OperationLinkType() op.LinkType {
+	switch f.Type() {
+	case SYMLINK:
+		return op.SYMBOLIC_LINK
+	case HARDLINK:
+		return op.HARD_LINK
+	default:
+		panic("Invalid link type")
+	}
+}
+
+func (f *Link) CreateOperation(relativePath string) op.Operation {
+	return op.NewCreateLink(relativePath, f.Target(), f.OperationLinkType())
 }
 
 func (s *Link) Equal(entry FolderEntry) bool {
@@ -56,18 +68,18 @@ func (s *Link) Equal(entry FolderEntry) bool {
 	return s.target == other.target && s.link_type == other.link_type
 }
 
-func (s *Link) EqualWithReason(entry FolderEntry) (bool, Reason) {
+func (s *Link) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
 	other, ok := entry.(*Link)
 	if !ok {
-		return false, Reason{Type: TypeChanged, Before: SYMLINK, After: entry.Type()}
+		return false, op.Reason{Type: op.TypeChanged, Before: SYMLINK, After: entry.Type()}
 	}
 	if s.target != other.target {
-		return false, Reason{Type: ContentChanged, Before: s.target, After: other.target}
+		return false, op.Reason{Type: op.ContentChanged, Before: s.target, After: other.target}
 	}
 	if s.link_type != other.link_type {
-		return false, Reason{Type: ContentChanged, Before: s.link_type, After: other.link_type}
+		return false, op.Reason{Type: op.ContentChanged, Before: s.link_type, After: other.link_type}
 	}
-	return true, Reason{}
+	return true, op.Reason{}
 }
 
 func (s *Link) WriteTo(location string) error {
