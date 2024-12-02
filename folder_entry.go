@@ -5,8 +5,10 @@ type FolderEntryType string
 
 // Define constants for FolderEntryType
 const (
-	FOLDER FolderEntryType = "folder"
-	FILE   FolderEntryType = "file"
+	FOLDER   FolderEntryType = "folder"
+	FILE     FolderEntryType = "file"
+	SYMLINK  FolderEntryType = "symlink"
+	HARDLINK FolderEntryType = "hardlink"
 )
 
 type FolderEntry interface {

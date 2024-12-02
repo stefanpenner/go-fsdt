@@ -5,15 +5,24 @@ import (
 	"strings"
 )
 
-type Operand string
+type (
+	Operand  string
+	LinkType string
+)
 
 const (
 	Unlink       Operand = "Unlink"
+	Link         Operand = "Link"
 	Rmdir        Operand = "Rmdir"
 	Mkdir        Operand = "Mkdir"
 	Create       Operand = "Create"
 	ChangeFile   Operand = "ChangeFile"
 	ChangeFolder Operand = "ChangeDir"
+)
+
+const (
+	HARD     LinkType = "hard"
+	SYMBOLIC LinkType = "symbolic"
 )
 
 type Reason struct {
@@ -167,6 +176,11 @@ func NewMkdir(relativePath string, operations ...Operation) Operation {
 	return handleVariadicOperation(Mkdir, relativePath, operations...)
 }
 
+func NewLink(relativePath string, target string, linkType LinkType) Operation {
+	// TODO: implement target path
+	return Operation{Operand: Link, RelativePath: relativePath}
+}
+
 func NewUnlink(relativePath string) Operation {
 	return Operation{Operand: Unlink, RelativePath: relativePath}
 }
@@ -181,4 +195,14 @@ func NewChangeFile(relativePath string, reason Reason) Operation {
 
 func NewChangeFolder(relativePath string, operations ...Operation) Operation {
 	return Operation{Operand: ChangeFolder, RelativePath: relativePath, Operations: operations}
+}
+
+func NewCreateHardlink(relativePath string, target string) Operation {
+	// TODO: Implement
+	return Operation{}
+}
+
+func NewCreateSymlink(relativePath string, target string) Operation {
+	// TODO: Implement
+	return Operation{}
 }

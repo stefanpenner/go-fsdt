@@ -108,6 +108,18 @@ func (f *Folder) Folder(name string, cb ...func(*Folder)) *Folder {
 	return folder
 }
 
+func (f *Folder) Symlink(name string, target string) *Symlink {
+	symlink := NewSymlink(target)
+	f._entries[name] = symlink
+	return symlink
+}
+
+func (f *Folder) Hardlink(name string, target string) *Hardlink {
+	hardlink := NewHardlink(target)
+	f._entries[name] = hardlink
+	return hardlink
+}
+
 func (f *Folder) Clone() FolderEntry {
 	clone := NewFolder()
 	for name, entry := range f._entries {
