@@ -115,6 +115,6 @@ func TestSymlink(t *testing.T) {
 
 		// Test diffing
 		diff := folder.Diff(loadedFolder)
-		assert.Empty(diff, "Folders should be identical after load")
+		assert.Equal(op.Nothing, diff, "Folders should be identical after load")
 	})
 }

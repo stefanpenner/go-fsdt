@@ -27,10 +27,11 @@ func sortStringsToLower(slice []string) {
 }
 
 // TODO: provide diffing without reason, and potentially different levels of reason
-func Diff(a, b *Folder, caseSensitive bool) []op.Operation {
-	updates := []op.Operation{}
-	additions := []op.Operation{}
-	removals := []op.Operation{}
+func Diff(a, b *Folder, caseSensitive bool) op.Operation {
+	result := a.ChangeOperation(".", op.Reason{})
+	// TODO: whats idiomatic?
+	// creates a copy of value
+	dirValue := result.Value.(op.DirValue)
 
 	a_index := 0
 	b_index := 0
@@ -65,20 +66,25 @@ func Diff(a, b *Folder, caseSensitive bool) []op.Operation {
 			equal, reason := a_entry.EqualWithReason(b_entry)
 
 			if equal {
-				// to nothing!
+				// do nothing!
 			} else if a_type == FOLDER && b_type == FOLDER {
+				a_entry := a_entry.(*Folder)
+				b_entry := b_entry.(*Folder)
+
 				// TODO: folder modes can change
 				// they are both folders, so we recurse
-				operations := Diff(a_entry.(*Folder), b_entry.(*Folder), caseSensitive)
+				operation := Diff(a_entry, b_entry, caseSensitive)
+				// this is a ChangeFolder opeation, insert it.
 
-				if len(operations) > 0 {
-					updates = append(updates, op.NewChangeFolderOperation(a_key, operations...))
+				operation.RelativePath = b_key
+				if operation.Operand != op.Noop {
+					dirValue.AddOperations(operation)
 				}
 			} else if a_type == FILE && b_type == FILE {
-				updates = append(updates, op.FileChangedOperation(b_key, reason))
+				dirValue.AddOperations(a_entry.ChangeOperation(b_key, reason))
 			} else {
-				removals = append(removals, a_entry.RemoveOperation(b_key))
-				additions = append(additions, b_entry.CreateOperation(b_key))
+				dirValue.AddOperations(a_entry.RemoveOperation(b_key, reason))
+				dirValue.AddOperations(b_entry.CreateOperation(b_key, reason))
 			}
 
 			a_index++
@@ -86,11 +92,12 @@ func Diff(a, b *Folder, caseSensitive bool) []op.Operation {
 		} else if a_key < b_key {
 			// a is missing from b
 			a_index++
-			removals = append(removals, a.RemoveChildOperation(a_key))
+
+			dirValue.AddOperations(a.RemoveChildOperation(a_key, op.Reason{})) // TODO: missing reason
 		} else if a_key > b_key {
 			// b is missing form a
 			b_index++
-			removals = append(removals, b.CreateChildOperation(b_key))
+			dirValue.AddOperations(b.CreateChildOperation(b_key, op.Reason{})) // TODO: missing reason
 		} else {
 			panic("fsdt/diff.go(unreachable)")
 		}
@@ -101,15 +108,20 @@ func Diff(a, b *Folder, caseSensitive bool) []op.Operation {
 	for a_index < len(a_keys) {
 		relative_path := a_keys[a_index]
 		a_index++
-		removals = append(removals, a.RemoveChildOperation(relative_path))
+		dirValue.AddOperations(a.RemoveChildOperation(relative_path, op.Reason{}))
 	}
 
 	// if stuff remains in B, add them
 	for b_index < len(b_keys) {
 		relative_path := b_keys[b_index]
 		b_index++
-		additions = append(additions, b.CreateChildOperation(relative_path))
+		dirValue.AddOperations(b.CreateChildOperation(relative_path, op.Reason{}))
 	}
 
-	return append(append(removals, updates...), additions...)
+	if len(dirValue.Operations) == 0 {
+		// TODO: also check if the dirs themselves changed (mode, permissions)
+		return op.Nothing
+	}
+	result.Value = dirValue
+	return result
 }

@@ -271,12 +271,12 @@ func TestCreateChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(op.NewFileOperation("README.md"), a.CreateChildOperation("README.md"))
+	assert.Equal(op.NewFileOperation("README.md"), a.CreateChildOperation("README.md", op.Reason{}))
 	assert.Equal(op.NewMkdirOperation("a",
 		op.NewMkdirOperation("b",
 			op.NewFileOperation("c"),
 		),
-	), a.CreateChildOperation("a"))
+	), a.CreateChildOperation("a", op.Reason{}))
 }
 
 func TestRemoveChildOperation(t *testing.T) {
@@ -289,12 +289,12 @@ func TestRemoveChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(op.NewUnlink("README.md"), a.RemoveChildOperation("README.md"))
+	assert.Equal(op.NewUnlink("README.md"), a.RemoveChildOperation("README.md", op.Reason{}))
 	assert.Equal(op.NewRmdir("a",
 		op.NewRmdir("b",
 			op.NewUnlink("c"),
 		),
-	), a.RemoveChildOperation("a"))
+	), a.RemoveChildOperation("a", op.Reason{}))
 }
 
 func TestFolderWriteTo(t *testing.T) {
@@ -357,33 +357,33 @@ func TestReadmeExample(t *testing.T) {
 	require.NoError(err)
 
 	// comparision to self should yield nothing
-	assert.Equal([]op.Operation{}, folder.Diff(folder))
+	assert.Equal(op.Nothing, folder.Diff(folder))
 
 	// let's compare the two, but they are the same so it's boring
-	assert.ElementsMatch([]op.Operation{}, newFolder.Diff(folder))
+	assert.Equal(op.Nothing, newFolder.Diff(folder))
 
 	// // we can also create a new folder via clone
 	clone := folder.Clone().(*Folder)
 
 	// let's compare the two, but they are the same so it's boring
-	assert.Equal([]op.Operation{}, folder.Diff(clone))
-	assert.Equal([]op.Operation{}, newFolder.Diff(clone))
+	assert.Equal(op.Nothing, folder.Diff(clone))
+	assert.Equal(op.Nothing, newFolder.Diff(clone))
 
 	// let's remove a folder that contains a file
 	err = folder.Remove("lib")
 
 	require.NoError(err)
 	// now there should be a diff
-	assert.Equal([]op.Operation{
+	assert.Equal(op.NewChangeFolderOperation(".",
 		op.NewMkdirOperation("lib",
 			op.NewFileOperation("Empty.txt"),
 		),
-	}, folder.Diff(clone))
+	), folder.Diff(clone))
 
 	// now there should be a diff (Reverse)
-	assert.Equal([]op.Operation{
+	assert.Equal(op.NewChangeFolderOperation(".",
 		op.NewRmdir("lib",
 			op.NewUnlink("Empty.txt"),
 		),
-	}, clone.Diff(folder))
+	), clone.Diff(folder))
 }
