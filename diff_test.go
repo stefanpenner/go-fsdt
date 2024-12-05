@@ -154,11 +154,11 @@ func TestWithContentDifferences(t *testing.T) {
 	a := NewFolder()
 	b := NewFolder()
 
-	a.FileString("README.md", "## HI\n")
+	readme := a.FileString("README.md", "## HI\n")
 	b.FileString("README.md", "## Bye\n")
 
 	assert.Equal([]op.Operation{
-		op.FileChangedOperation("README.md", op.Reason{
+		readme.ChangeOperation("README.md", op.Reason{
 			Type:   op.ContentChanged,
 			Before: []byte("## HI\n"),
 			After:  []byte("## Bye\n"),
@@ -210,12 +210,12 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 	b := NewFolder()
 
 	a.Folder("foo", func(f *Folder) {
-		f.FileString("README.md", "## HI\n")
 		f.Folder("bar", func(f *Folder) {
 			f.FileString("a.md", "## HI\n")
 			f.FileString("README.md", "## HI\n")
 		})
 	})
+	readme := a.FileString("README.md", "## HI\n")
 
 	b.Folder("foo", func(f *Folder) {
 		f.FileString("README.md", "## BYE\n")
@@ -225,16 +225,29 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 		})
 	})
 
+	assert.Equal(`
+  change foo/
+    change README
+  `, `
+  change foo/
+    change README.md
+  `,
+	)
+
+	assert.Equal(
+		readme.ChangeOperation("apple", op.Reason{}).String(),
+		readme.ChangeOperation("orange", op.Reason{}).String(),
+	)
 	assert.Equal([]op.Operation{
 		op.NewChangeFolderOperation("foo",
-			op.FileChangedOperation("README.md", op.Reason{
+			readme.ChangeOperation("README.md", op.Reason{
 				Type:   op.ContentChanged,
 				Before: []byte("## HI\n"),
 				After:  []byte("## BYE\n"),
 			}),
 			op.NewChangeFolderOperation("bar",
 				op.NewUnlink("a.md"),
-				op.FileChangedOperation("README.md", op.Reason{
+				readme.ChangeOperation("README.md", op.Reason{
 					Type:   op.ContentChanged,
 					Before: []byte("## HI\n"),
 					After:  []byte("## BYE\n"),

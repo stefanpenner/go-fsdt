@@ -271,12 +271,12 @@ func TestCreateChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(op.NewFileOperation("README.md"), a.CreateChildOperation("README.md"))
+	assert.Equal(op.NewFileOperation("README.md"), a.CreateChildOperation("README.md", op.Reason{}))
 	assert.Equal(op.NewMkdirOperation("a",
 		op.NewMkdirOperation("b",
 			op.NewFileOperation("c"),
 		),
-	), a.CreateChildOperation("a"))
+	), a.CreateChildOperation("a", op.Reason{}))
 }
 
 func TestRemoveChildOperation(t *testing.T) {
@@ -289,12 +289,12 @@ func TestRemoveChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(op.NewUnlink("README.md"), a.RemoveChildOperation("README.md"))
+	assert.Equal(op.NewUnlink("README.md"), a.RemoveChildOperation("README.md", op.Reason{}))
 	assert.Equal(op.NewRmdir("a",
 		op.NewRmdir("b",
 			op.NewUnlink("c"),
 		),
-	), a.RemoveChildOperation("a"))
+	), a.RemoveChildOperation("a", op.Reason{}))
 }
 
 func TestFolderWriteTo(t *testing.T) {
