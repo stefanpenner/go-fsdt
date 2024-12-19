@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFileMode(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
 	file := NewFile()
 
@@ -19,9 +21,7 @@ func TestFileMode(t *testing.T) {
 	file.WriteTo(tempdir + "/foo.txt")
 
 	stat, err := os.Stat(tempdir + "/foo.txt")
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(err)
 
 	assert.Equal(os.FileMode(0644), stat.Mode())
 	assert.Equal(os.FileMode(0644), stat.Mode().Perm())

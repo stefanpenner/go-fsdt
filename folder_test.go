@@ -11,6 +11,7 @@ import (
 
 	op "github.com/stefanpenner/go-fsdt/operation"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func JSON[T any](value T) string {
@@ -49,6 +50,7 @@ func readString(root string) string {
 
 func TestFolderMode(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
 	folder := NewFolder()
 
@@ -59,9 +61,7 @@ func TestFolderMode(t *testing.T) {
 	folder.WriteTo(tempdir + "/foo/")
 
 	stat, err := os.Stat(tempdir + "/foo")
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(err)
 
 	assert.Equal(os.FileMode(os.ModeDir|0755), stat.Mode())
 	assert.Equal(os.FileMode(0755), stat.Mode().Perm())
@@ -102,9 +102,7 @@ func TestFolderToDirAndBack(t *testing.T) {
 	assert.Equal(t, []string{}, dir(tempDir), "has no files")
 
 	err := folder.WriteTo(folderRoot)
-	if err != nil {
-		log.Panic(err)
-	}
+	require.NoError(t, err)
 
 	t.Run("check the raw disk", func(t *testing.T) {
 		assert := assert.New(t)
@@ -274,7 +272,7 @@ func TestRemoveChildOperation(t *testing.T) {
 
 func TestReadmeExample(t *testing.T) {
 	assert := assert.New(t)
-	tempDir := t.TempDir()
+	require := require.New(t)
 
 	// create a new folder, in memory
 	folder := NewFolder()
@@ -298,11 +296,10 @@ func TestReadmeExample(t *testing.T) {
 
 	_, _, _, _ = readme_one, readme_two, lib, tests
 
+	folderDir := t.TempDir() + "/folder"
 	// write that folder to disk
-	err := folder.WriteTo(tempDir + "/folder/")
-	if err != nil {
-		panic(err)
-	}
+	err := folder.WriteTo(folderDir)
+	require.NoError(err)
 
 	// now /path/to/somewhere has the contents of folder
 
@@ -310,10 +307,8 @@ func TestReadmeExample(t *testing.T) {
 	newFolder := NewFolder()
 
 	// populate it from the path we just wrote
-	err = newFolder.ReadFrom(tempDir + "/folder/")
-	if err != nil {
-		panic(err)
-	}
+	err = newFolder.ReadFrom(folderDir)
+	require.NoError(err)
 
 	// comparision to self should yield nothing
 	assert.Equal([]op.Operation{}, folder.Diff(folder))
@@ -330,9 +325,8 @@ func TestReadmeExample(t *testing.T) {
 
 	// let's remove a folder that contains a file
 	err = folder.Remove("lib")
-	if err != nil {
-		panic(err)
-	}
+
+	require.NoError(err)
 	// now there should be a diff
 	assert.Equal([]op.Operation{
 		op.NewMkdirOperation("lib",
