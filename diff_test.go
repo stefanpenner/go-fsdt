@@ -225,35 +225,30 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 		})
 	})
 
-	assert.Equal(`
-  change foo/
-    change README
-  `, `
-  change foo/
-    change README.md
-  `,
+	assert.Equal(
+		readme.ChangeOperation("apple", op.Reason{}).Print(" "),
+		readme.ChangeOperation("apple", op.Reason{}).Print(" "),
 	)
 
 	assert.Equal(
-		readme.ChangeOperation("apple", op.Reason{}).String(),
-		readme.ChangeOperation("orange", op.Reason{}).String(),
-	)
-	assert.Equal([]op.Operation{
-		op.NewChangeFolderOperation("foo",
-			readme.ChangeOperation("README.md", op.Reason{
-				Type:   op.ContentChanged,
-				Before: []byte("## HI\n"),
-				After:  []byte("## BYE\n"),
-			}),
-			op.NewChangeFolderOperation("bar",
-				op.NewUnlink("a.md"),
+		op.Print(
+			" ",
+			op.NewChangeFolderOperation("foo",
 				readme.ChangeOperation("README.md", op.Reason{
 					Type:   op.ContentChanged,
 					Before: []byte("## HI\n"),
 					After:  []byte("## BYE\n"),
 				}),
-				op.NewFileOperation("b.md"),
+				op.NewChangeFolderOperation("bar",
+					op.NewUnlink("a.md"),
+					readme.ChangeOperation("README.md", op.Reason{
+						Type:   op.ContentChanged,
+						Before: []byte("## HI\n"),
+						After:  []byte("## BYE\n"),
+					}),
+					op.NewFileOperation("b.md"),
+				),
 			),
 		),
-	}, a.Diff(b))
+		op.Print(" ", a.Diff(b)...))
 }

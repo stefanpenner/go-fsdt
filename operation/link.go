@@ -1,5 +1,7 @@
 package operation
 
+import "fmt"
+
 type LinkType string
 
 const (
@@ -16,6 +18,10 @@ const (
 	Unlink     Operand = "Unlink"
 	CreateLink Operand = "CreateLink"
 )
+
+func (l LinkValue) Print(indent string) string {
+	return fmt.Sprintf("%s link %s", indent, l.Target)
+}
 
 func NewUnlink(relativePath string) Operation {
 	return Operation{
