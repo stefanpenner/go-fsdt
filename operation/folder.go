@@ -5,6 +5,12 @@ type DirValue struct {
 	Operations []Operation
 }
 
+func (d DirValue) Print(indent string) string {
+	result := ""
+
+	return result
+}
+
 func NewRmdir(relativePath string, operations ...Operation) Operation {
 	if len(operations) == 0 {
 		return Operation{
