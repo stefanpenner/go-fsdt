@@ -137,6 +137,23 @@ func (f *Folder) Clone() FolderEntry {
 	return clone
 }
 
+func (f *Folder) FileStrings(prefix string) []string {
+	entries := []string{}
+
+	for _, name := range f.Entries() {
+		entry := f._entries[name]
+		fullpath := filepath.Join(prefix, name)
+
+		switch e := entry.(type) {
+		case *File:
+			entries = append(entries, e.Strings(fullpath)...)
+		case *Folder:
+			entries = append(entries, e.FileStrings(fullpath)...)
+		}
+	}
+	return entries
+}
+
 func (f *Folder) Strings(prefix string) []string {
 	entries := []string{}
 
