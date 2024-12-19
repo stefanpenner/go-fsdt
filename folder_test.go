@@ -289,6 +289,25 @@ func TestRemoveChildOperation(t *testing.T) {
 	), a.RemoveChildOperation("a"))
 }
 
+func TestFolderWriteTo(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	folder := NewFolder()
+
+	location := t.TempDir()
+	err := folder.WriteTo(location) // write to existing folder
+	require.NoError(err)
+
+	assert.Equal([]string{}, dir(location))
+
+	location = t.TempDir() + "/non-existent-subdir"
+	err = folder.WriteTo(location)
+	require.NoError(err)
+
+	assert.Equal([]string{}, dir(location))
+}
+
 func TestReadmeExample(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)

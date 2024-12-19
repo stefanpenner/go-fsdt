@@ -1,6 +1,7 @@
 package fsdt
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -154,7 +155,7 @@ func (f *Folder) Strings(prefix string) []string {
 
 func (f *Folder) WriteTo(location string) error {
 	err := os.Mkdir(location, f.mode.Perm())
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
 	for _, relativePath := range f.Entries() {
