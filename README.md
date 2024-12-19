@@ -42,7 +42,9 @@ Inspired by:
 Basic Example
 ```go
 // create a new folder, in memory
-folder := fsdt.NewFolder()
+folder := fsdt.NewFolder(func(f *fsdt.Folder) {
+  f.FileString("todo.txt", "- [] finish FSDT\n- [] ...\n- [ ] Profit")
+})
 
 // add a file, with the content of a string
 readme_one := folder.FileString("README_one.md", "## h1\n")

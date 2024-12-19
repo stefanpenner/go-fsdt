@@ -17,11 +17,17 @@ type Folder struct {
 
 var DEFAULT_FOLDER_MODE = os.FileMode(os.ModeDir | 0755)
 
-func NewFolder() *Folder {
-	return &Folder{
+func NewFolder(cb ...func(f *Folder)) *Folder {
+	folder := &Folder{
 		_entries: map[string]FolderEntry{},
 		mode:     DEFAULT_FOLDER_MODE,
 	}
+
+	for _, cb := range cb {
+		cb(folder)
+	}
+
+	return folder
 }
 
 func (f *Folder) Entries() []string {

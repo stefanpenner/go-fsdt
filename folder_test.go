@@ -85,6 +85,25 @@ func TestFolderStrings(t *testing.T) {
 	assert.Equal([]string{"/root/", "/root/README.md", "/root/lib/", "/root/lib/foo/", "/root/lib/foo/bar/", "/root/lib/foo/bar/baz.go", "/root/lib/lib.go"}, folder.Strings("/root"))
 }
 
+func TestFolderCallback(t *testing.T) {
+	assert := assert.New(t)
+	folder := NewFolder(func(f *Folder) {
+		f.FileString("README.md", "## HI\n")
+		f.Folder("lib", func(f *Folder) {
+			f.Folder("foo", func(f *Folder) {
+				f.Folder("bar", func(f *Folder) {
+					f.FileString("baz.go", "package baz\n")
+				})
+			})
+			f.FileString("lib.go", "package lib\n")
+		})
+	})
+
+	assert.Equal([]string{"README.md", "lib/", "lib/foo/", "lib/foo/bar/", "lib/foo/bar/baz.go", "lib/lib.go"}, folder.Strings(""))
+	assert.Equal([]string{"root/", "root/README.md", "root/lib/", "root/lib/foo/", "root/lib/foo/bar/", "root/lib/foo/bar/baz.go", "root/lib/lib.go"}, folder.Strings("root"))
+	assert.Equal([]string{"/root/", "/root/README.md", "/root/lib/", "/root/lib/foo/", "/root/lib/foo/bar/", "/root/lib/foo/bar/baz.go", "/root/lib/lib.go"}, folder.Strings("/root"))
+}
+
 func TestFolderToDirAndBack(t *testing.T) {
 	folder := NewFolder()
 	folder.FileString("README.md", "## HI\n")
