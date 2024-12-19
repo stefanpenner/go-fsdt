@@ -1,5 +1,9 @@
 package operation
 
+import (
+	"fmt"
+)
+
 type (
 	Operand string
 )
@@ -34,6 +38,22 @@ const (
 
 type Operation struct {
 	RelativePath string
-	Value        interface{}
+	Value        Value
 	Operand      Operand
+}
+
+func (op Operation) Print(indent string) string {
+	result := fmt.Sprintf("%s: %s", op.Operand, op.RelativePath)
+	result += op.Value.Print(indent)
+	return result
+}
+
+func Print(indent string, operations ...Operation) string {
+	result := ""
+
+	for _, operation := range operations {
+		result += fmt.Sprintf(" %s - %s\n", indent, operation.Print(indent))
+	}
+
+	return result
 }
