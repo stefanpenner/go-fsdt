@@ -5,6 +5,7 @@ import (
 
 	op "github.com/stefanpenner/go-fsdt/operation"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSymlink(t *testing.T) {
@@ -12,13 +13,14 @@ func TestSymlink(t *testing.T) {
 
 	folder.File("target_file", FileOptions{Content: []byte("hello")})
 	folder.Folder("target_folder")
+	folder.Symlink("link_to_file", "target_file")
+	folder.Symlink("link_to_folder", "target_folder")
 
 	t.Run("basic symlink operations", func(t *testing.T) {
 		assert := assert.New(t)
 		folder := folder.Clone().(*Folder)
-
-		link_to_file := folder.Symlink("link_to_file", "target_file")
-		link_to_folder := folder.Symlink("link_to_folder", "target_folder")
+		link_to_file := folder.Get("link_to_file").(*Link)
+		link_to_folder := folder.Get("link_to_folder").(*Link)
 
 		assert.Equal(SYMLINK, link_to_file.Type())
 		assert.Equal(link_to_file, folder.Get("link_to_file"))
@@ -43,6 +45,8 @@ func TestSymlink(t *testing.T) {
 
 	t.Run("Equal", func(t *testing.T) {
 		assert := assert.New(t)
+		folder := folder.Clone().(*Folder)
+
 		symlink := folder.Symlink("from", "to")
 		hardlink := folder.Hardlink("other", "to")
 		other := folder.Symlink("from", "to")
@@ -62,6 +66,8 @@ func TestSymlink(t *testing.T) {
 	t.Run("EqualWithReason", func(t *testing.T) {
 		t.Run("symlink", func(t *testing.T) {
 			assert := assert.New(t)
+			folder := folder.Clone().(*Folder)
+
 			symlink := folder.Symlink("from", "to")
 			hardlink := folder.Hardlink("other", "to")
 			other := folder.Symlink("from", "to")
@@ -100,6 +106,8 @@ func TestSymlink(t *testing.T) {
 
 		t.Run("hardlink", func(t *testing.T) {
 			assert := assert.New(t)
+			folder := folder.Clone().(*Folder)
+
 			hardlink := folder.Hardlink("link1", "original_file")
 			symlink := folder.Symlink("other", "original_file")
 			other := folder.Hardlink("link2", "original_file")
@@ -132,29 +140,29 @@ func TestSymlink(t *testing.T) {
 		})
 	})
 
-	// TODO: implement
-	// t.Run("persistence", func(t *testing.T) {
-	// 	assert := assert.New(t)
-	// 	folder := folder.Clone().(*Folder)
-	//
-	// 	// Write to disk
-	// 	tempDir := t.TempDir()
-	// 	assert.NoError(folder.WriteTo(path.Join(tempDir, "folder")))
-	//
-	// 	// Read back from disk
-	// 	loadedFolder := NewFolder()
-	// 	assert.NoError(loadedFolder.ReadFrom(path.Join(tempDir, "folder")))
-	//
-	// 	// Verify links are preserved
-	// 	link_to_file := loadedFolder.Get("link_to_file").(*Symlink)
-	//
-	// 	assert.Equal(SYMLINK, link_to_file.Type())
-	// 	assert.Equal("target_file", link_to_file.Target)
-	//
-	// 	// Test diffing
-	// 	diff := folder.Diff(loadedFolder)
-	// 	assert.Empty(diff, "Folders should be identical after load")
-	// })
+	t.Run("persistence", func(t *testing.T) {
+		assert := assert.New(t)
+		require := require.New(t)
+		folder := folder.Clone().(*Folder)
+
+		// Write to disk
+		location := t.TempDir()
+		require.NoError(folder.WriteTo(location))
+
+		// Read back from disk
+		loadedFolder := NewFolder()
+		require.NoError(loadedFolder.ReadFrom(location))
+
+		// Verify links are preserved
+		link_to_file := loadedFolder.Get("link_to_file").(*Link)
+
+		assert.Equal(SYMLINK, link_to_file.Type())
+		assert.Equal("target_file", link_to_file.Target())
+
+		// Test diffing
+		diff := folder.Diff(loadedFolder)
+		assert.Empty(diff, "Folders should be identical after load")
+	})
 }
 
 func TestHardlink(t *testing.T) {
@@ -162,13 +170,13 @@ func TestHardlink(t *testing.T) {
 
 	// Create some files to link to
 	folder.FileString("original_file", "hello world")
+	hard_link := folder.Hardlink("hard_link", "original_file")
 
 	t.Run("basic hardlink operations", func(t *testing.T) {
 		assert := assert.New(t)
 
 		folder := folder.Clone().(*Folder)
 		// Create valid hardlink
-		hard_link := folder.Hardlink("hard_link", "original_file")
 
 		// Verify the link exists and is correct type
 		assert.Equal(hard_link, folder.Get("hard_link"))
@@ -179,32 +187,30 @@ func TestHardlink(t *testing.T) {
 		original_file := folder.Get("original_file").(*File)
 		assert.Equal("hello world", original_file.ContentString())
 
-		// TODO: should we support this?
+		// TODO: should we support this? NO, probably not
 		// assert.Equal("hello world", hard_link.GetContent())
 	})
 
-	// TODO:  do this
-	// t.Run("persistence", func(t *testing.T) {
-	// 	assert := assert.New(t)
-	//
-	// 	folder := folder.Clone().(*Folder)
-	// 	// Write to disk
-	// 	tempDir := t.TempDir()
-	// 	assert.NoError(folder.WriteTo(tempDir))
-	//
-	// 	// Read back from disk
-	// 	loadedFolder := NewFolder()
-	// 	assert.NoError(loadedFolder.ReadFrom(tempDir))
-	//
-	// 	// Verify hardlinks are preserved
-	// 	hard_link := loadedFolder.Get("hard_link").(*HardLink)
-	// 	assert.Equal(HARDLINK, hard_link.Type())
-	// 	assert.Equal("original_file", hard_link.Target)
-	//
-	// 	// Test diffing
-	// 	diff := folder.Diff(loadedFolder)
-	// 	assert.Empty(diff, "Folders should be identical after load")
-	//
-	// 	// TODO: more
-	// })
+	t.Run("persistence", func(t *testing.T) {
+		assert := assert.New(t)
+		require := require.New(t)
+
+		folder := folder.Clone().(*Folder)
+		// Write to disk
+		tempDir := t.TempDir()
+		require.NoError(folder.WriteTo(tempDir))
+
+		// Read back from disk
+		loadedFolder := NewFolder()
+		require.NoError(loadedFolder.ReadFrom(tempDir))
+
+		// Verify hardlinks are preserved
+		hard_link := loadedFolder.Get("hard_link").(*Link)
+		assert.Equal(HARDLINK, hard_link.Type())
+		assert.Equal("original_file", hard_link.Target())
+
+		// Test diffing
+		diff := folder.Diff(loadedFolder)
+		assert.Empty(diff, "Folders should be identical after load")
+	})
 }

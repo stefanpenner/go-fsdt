@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"syscall"
 
 	op "github.com/stefanpenner/go-fsdt/operation"
 )
@@ -117,15 +118,15 @@ func (f *Folder) Folder(name string, cb ...func(*Folder)) *Folder {
 	return folder
 }
 
-func (f *Folder) Symlink(name string, target string) *Link {
+func (f *Folder) Symlink(link string, target string) *Link {
 	symlink := NewLink(target, SYMLINK)
-	f._entries[name] = symlink
+	f._entries[link] = symlink
 	return symlink
 }
 
-func (f *Folder) Hardlink(name string, target string) *Link {
+func (f *Folder) Hardlink(link string, target string) *Link {
 	hardlink := NewLink(target, HARDLINK)
-	f._entries[name] = hardlink
+	f._entries[link] = hardlink
 	return hardlink
 }
 
@@ -197,7 +198,7 @@ func (f *Folder) ReadFrom(path string) error {
 			if err != nil {
 				return err
 			}
-		} else {
+		} else if entry.Type().IsRegular() {
 			content, err := os.ReadFile(path + "/" + entry.Name())
 			if err != nil {
 				return err
@@ -210,6 +211,35 @@ func (f *Folder) ReadFrom(path string) error {
 				Content: content,
 				Mode:    info.Mode(),
 			})
+		} else if entry.Type()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path + "/" + entry.Name())
+			if err != nil {
+				return err
+			}
+
+			f.Symlink(entry.Name(), target)
+		} else {
+			fullPath := path + "/" + entry.Name()
+
+			info, err := os.Lstat(fullPath)
+			if err != nil {
+				return err
+			}
+
+			stat, ok := info.Sys().(*syscall.Stat_t)
+			if !ok {
+				return fmt.Errorf("lstat.info.Sys() failed for %s", fullPath)
+			}
+
+			if stat.Nlink > 1 {
+				target, err := os.Readlink(fullPath)
+				if err != nil {
+					return err
+				}
+				f.Hardlink(entry.Name(), target)
+			} else {
+				return fmt.Errorf("Unexpected DirEntry Type: %s", entry.Type())
+			}
 		}
 	}
 

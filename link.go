@@ -1,6 +1,7 @@
 package fsdt
 
 import (
+	"fmt"
 	"os"
 
 	op "github.com/stefanpenner/go-fsdt/operation"
@@ -82,8 +83,14 @@ func (l *Link) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
 	return true, op.Reason{}
 }
 
-func (l *Link) WriteTo(location string) error {
-	return os.Link(l.target, location)
+func (l *Link) WriteTo(link string) error {
+	if l.Type() == SYMLINK {
+		return os.Symlink(l.target, link)
+	} else if l.Type() == HARDLINK {
+		return os.Link(l.target, link)
+	} else {
+		return fmt.Errorf("unexpected link type: %s", l.Type())
+	}
 }
 
 func (l *Link) HasContent() bool {
