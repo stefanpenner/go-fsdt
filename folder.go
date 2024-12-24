@@ -143,10 +143,12 @@ func (f *Folder) FileStrings(prefix string) []string {
 		fullpath := filepath.Join(prefix, name)
 
 		switch e := entry.(type) {
-		case *File:
-			entries = append(entries, e.Strings(fullpath)...)
+		case *File, *Link:
+			entries = append(entries, fullpath)
 		case *Folder:
 			entries = append(entries, e.FileStrings(fullpath)...)
+		default:
+			panic(fmt.Sprintf("go-fsdt/Folder.FileStrings does not support FileEntries of type: %s", e))
 		}
 	}
 	return entries
