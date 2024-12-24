@@ -10,7 +10,7 @@ const (
 	FOLDER   FolderEntryType = "folder"
 	FILE     FolderEntryType = "file"
 	SYMLINK  FolderEntryType = "symlink"
-	HARDLINK FolderEntryType = "hardlink"
+	HARDLINK FolderEntryType = "hardlink" // Not really supported currently, may never choose to support them.
 )
 
 type FolderEntry interface {

@@ -25,7 +25,7 @@ func NewUnlink(relativePath string) Operation {
 }
 
 func NewCreateLink(relativePath string, target string, linkType LinkType) Operation {
-	if linkType == SYMBOLIC_LINK || linkType == HARD_LINK {
+	if linkType == SYMBOLIC_LINK {
 		return Operation{
 			Operand:      CreateLink,
 			RelativePath: relativePath,
@@ -35,6 +35,6 @@ func NewCreateLink(relativePath string, target string, linkType LinkType) Operat
 			},
 		}
 	} else {
-		panic("cannot create NewCreateLink that isn't a symlink or hardlink") // TODO: unify and provide a good error
+		panic("cannot create NewCreateLink that isn't a symlink") // TODO: unify and provide a good error
 	}
 }

@@ -1,6 +1,6 @@
 - [ ] permissions
 - [ ] extended attributes
-- [ ] symlinks / hardlinks etc
+- [x] symlinks / hardlinks etc
 - [ ] easy to use in tests
   - [ ] easy to do deep comparison
 - [ ] easy to provide folder / files from other structures like a tar

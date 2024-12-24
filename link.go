@@ -13,16 +13,15 @@ type Link struct {
 	mode      os.FileMode
 }
 
-// TODO: explore generics for constraining, first glance made it look a little tedious
 func NewLink(target string, link_type FolderEntryType) *Link {
-	if link_type == HARDLINK || link_type == SYMLINK {
+	if link_type == SYMLINK {
 		return &Link{
 			target:    target,
 			mode:      0777,
-			link_type: link_type,
+			link_type: SYMLINK,
 		}
 	} else {
-		panic("New Link type must be either hardlink or symlink")
+		panic("go-fsdt/NewLink only symlinks supported")
 	}
 }
 
@@ -87,7 +86,7 @@ func (l *Link) WriteTo(link string) error {
 	if l.Type() == SYMLINK {
 		return os.Symlink(l.target, link)
 	} else if l.Type() == HARDLINK {
-		return os.Link(l.target, link)
+		panic("go-fsdt/hardlink not supported")
 	} else {
 		return fmt.Errorf("unexpected link type: %s", l.Type())
 	}

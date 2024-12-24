@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"syscall"
 
 	op "github.com/stefanpenner/go-fsdt/operation"
 )
@@ -125,9 +124,7 @@ func (f *Folder) Symlink(link string, target string) *Link {
 }
 
 func (f *Folder) Hardlink(link string, target string) *Link {
-	hardlink := NewLink(target, HARDLINK)
-	f._entries[link] = hardlink
-	return hardlink
+	panic("go-fsdt/hardlink unsupported")
 }
 
 func (f *Folder) Clone() FolderEntry {
@@ -219,27 +216,7 @@ func (f *Folder) ReadFrom(path string) error {
 
 			f.Symlink(entry.Name(), target)
 		} else {
-			fullPath := path + "/" + entry.Name()
-
-			info, err := os.Lstat(fullPath)
-			if err != nil {
-				return err
-			}
-
-			stat, ok := info.Sys().(*syscall.Stat_t)
-			if !ok {
-				return fmt.Errorf("lstat.info.Sys() failed for %s", fullPath)
-			}
-
-			if stat.Nlink > 1 {
-				target, err := os.Readlink(fullPath)
-				if err != nil {
-					return err
-				}
-				f.Hardlink(entry.Name(), target)
-			} else {
-				return fmt.Errorf("Unexpected DirEntry Type: %s", entry.Type())
-			}
+			return fmt.Errorf("Unexpected DirEntry Type: %s", entry.Type())
 		}
 	}
 

@@ -77,14 +77,12 @@ func TestDiffStuffAWithEmptyB(t *testing.T) {
 	a.Folder("lib", func(f *Folder) {})
 	a.Folder("apple", func(f *Folder) {})
 	a.Symlink("a", "apple")
-	a.Hardlink("b", "apple")
 
 	assert.Equal([]op.Operation{
 		op.NewUnlink("BUILD.bazel"),
 		op.NewUnlink("README.md"),
 		op.NewUnlink("a"),
 		op.NewRmdir("apple"),
-		op.NewUnlink("b"),
 		op.NewRmdir("lib"),
 	}, a.Diff(b))
 }
@@ -100,14 +98,12 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	b.Folder("lib")
 	b.Folder("apple")
 	b.Symlink("a", "apple")
-	b.Hardlink("b", "apple")
 
 	assert.Equal([]op.Operation{
 		op.NewFileOperation("BUILD.bazel"),
 		op.NewFileOperation("README.md"),
 		op.NewCreateLink("a", "apple", op.SYMBOLIC_LINK),
 		op.NewMkdirOperation("apple"),
-		op.NewCreateLink("b", "apple", op.HARD_LINK),
 		op.NewMkdirOperation("lib"),
 	}, a.Diff(b))
 }
@@ -124,17 +120,8 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 	a.Symlink("a", "somewhere")
 	b.Symlink("a", "somewhere")
 
-	a.Hardlink("b", "somewhere-else")
-	b.Hardlink("b", "somewhere-else")
-
-	a.Symlink("c", "somewhere")
-	b.Hardlink("c", "somewhere")
-
 	a.Symlink("d", "somewhere")
 	b.Symlink("d", "somewhere-else")
-
-	a.Hardlink("e", "somewhere")
-	b.Hardlink("e", "somewhere-else")
 
 	a.FileString("BUILD.bazel", "## HI\n")
 	// BUILD.bazel is not in b
@@ -153,13 +140,9 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 
 	assert.Equal([]op.Operation{
 		op.NewUnlink("BUILD.bazel"),
-		op.NewUnlink("c"), // TODO: should this include reason? Should this be a change?
 		op.NewUnlink("d"),
-		op.NewUnlink("e"),
 		op.NewRmdir("lib"),
-		op.NewCreateLink("c", "somewhere", op.HARD_LINK),
 		op.NewCreateLink("d", "somewhere-else", op.SYMBOLIC_LINK),
-		op.NewCreateLink("e", "somewhere-else", op.HARD_LINK),
 		op.NewFileOperation("notes.txt"),
 		op.NewMkdirOperation("orange"),
 	}, a.Diff(b))
