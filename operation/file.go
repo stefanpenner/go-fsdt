@@ -1,19 +1,20 @@
 package operation
 
+import "fmt"
+
 type FileChangedValue struct {
 	Reason Reason
+}
+
+func (f FileChangedValue) Print(indent string, prefix string) string {
+	return fmt.Sprintf("%s - %s", indent, "Because")
 }
 
 func NewFileOperation(relativePath string) Operation {
 	return Operation{Operand: Create, RelativePath: relativePath}
 }
 
-func FileChangedOperation(relativePath string, reason Reason) Operation {
-	return Operation{
-		Operand:      ChangeFile,
-		RelativePath: relativePath,
-		Value: FileChangedValue{
-			Reason: reason,
-		},
-	}
+func NewChangeFileOperation(relativePath string) Operation {
+	// TODO: reason
+	return Operation{Operand: ChangeFile, RelativePath: relativePath}
 }

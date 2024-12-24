@@ -46,12 +46,14 @@ func (f *Folder) Mode() os.FileMode {
 	return f.mode
 }
 
-func (f *Folder) RemoveOperation(relativePath string) op.Operation {
+func (f *Folder) RemoveOperation(relativePath string, reason op.Reason) op.Operation {
 	operations := []op.Operation{}
 	for _, relativePath := range f.Entries() {
 		entry := f._entries[relativePath]
-		operations = append(operations, entry.RemoveOperation(relativePath))
+		operations = append(operations, entry.RemoveOperation(relativePath, reason))
 	}
+
+	// TODO: reason
 	return op.NewRmdir(relativePath, operations...)
 }
 
@@ -74,23 +76,27 @@ func (f *Folder) Remove(relativePath string) error {
 	}
 }
 
-func (f *Folder) RemoveChildOperation(relativePath string) op.Operation {
-	return f.Get(relativePath).RemoveOperation(relativePath)
+func (f *Folder) RemoveChildOperation(relativePath string, reason op.Reason) op.Operation {
+	return f.Get(relativePath).RemoveOperation(relativePath, reason)
 }
 
-func (f *Folder) CreateOperation(relativePath string) op.Operation {
+func (f *Folder) CreateOperation(relativePath string, reason op.Reason) op.Operation {
 	operations := []op.Operation{}
 
 	for _, relativePath := range f.Entries() {
 		entry := f._entries[relativePath]
-		operations = append(operations, entry.CreateOperation(relativePath))
+		operations = append(operations, entry.CreateOperation(relativePath, reason))
 	}
 
 	return op.NewMkdirOperation(relativePath, operations...)
 }
 
-func (f *Folder) CreateChildOperation(relativePath string) op.Operation {
-	return f.Get(relativePath).CreateOperation(relativePath)
+func (f *Folder) ChangeOperation(relativePath string, reason op.Reason, operations ...op.Operation) op.Operation {
+	return op.NewChangeFolderOperation(relativePath, operations...)
+}
+
+func (f *Folder) CreateChildOperation(relativePath string, reason op.Reason) op.Operation {
+	return f.Get(relativePath).CreateOperation(relativePath, reason)
 }
 
 func (f *Folder) File(name string, content ...FileOptions) *File {
@@ -246,11 +252,11 @@ func (f *Folder) Content() []byte {
 	return []byte{}
 }
 
-func (f *Folder) Diff(b *Folder) []op.Operation {
+func (f *Folder) Diff(b *Folder) op.Operation {
 	return Diff(f, b, true)
 }
 
-func (f *Folder) CaseInsensitiveDiff(b *Folder) []op.Operation {
+func (f *Folder) CaseInsensitiveDiff(b *Folder) op.Operation {
 	return Diff(f, b, false)
 }
 
