@@ -2,6 +2,8 @@
 
 **A File System Diffing Toolchain**
 
+> ⚠️ **Alpha Status**: This project is in early development. APIs may change without notice.
+
 `go-fsdt` is a reimagined Go implementation of several Node.js libraries,
 offering powerful tools for comparing file systems, deriving minimal IO
 operations, and managing file system fixtures.
