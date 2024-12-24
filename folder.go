@@ -252,11 +252,11 @@ func (f *Folder) Content() []byte {
 	return []byte{}
 }
 
-func (f *Folder) Diff(b *Folder) []op.Operation {
+func (f *Folder) Diff(b *Folder) op.Operation {
 	return Diff(f, b, true)
 }
 
-func (f *Folder) CaseInsensitiveDiff(b *Folder) []op.Operation {
+func (f *Folder) CaseInsensitiveDiff(b *Folder) op.Operation {
 	return Diff(f, b, false)
 }
 

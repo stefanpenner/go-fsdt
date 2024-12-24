@@ -59,7 +59,7 @@ func (l *Link) OperationLinkType() op.LinkType {
 
 func (l *Link) CreateOperation(relativePath string, reason op.Reason) op.Operation {
 	// TODO: reason
-	return op.NewCreateLink(relativePath, l.Target(), l.OperationLinkType())
+	return op.NewCreateLink(relativePath, l.Target())
 }
 
 func (l *Link) ChangeOperation(relativePath string, reason op.Reason, operations ...op.Operation) op.Operation {

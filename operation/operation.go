@@ -1,22 +1,24 @@
 package operation
 
-import (
-	"fmt"
-)
+import "fmt"
 
 type (
 	Operand string
 )
 
+// TODO: Create -> CreateFile
 const (
-	Create       Operand = "Create"
+	Create       Operand = "CreateFile"
 	ChangeFile   Operand = "ChangeFile"
 	ChangeFolder Operand = "ChangeDir"
+	Rmdir        Operand = "Rmdir"
+	Mkdir        Operand = "Mkdir"
 )
 
 const (
-	Rmdir Operand = "Rmdir"
-	Mkdir Operand = "Mkdir"
+	UI_T = "├── "
+	UI_V = "│   "
+	UI_J = "└── "
 )
 
 type Reason struct {
@@ -42,19 +44,42 @@ type Operation struct {
 	Operand      Operand
 }
 
-func (op Operation) Print(indent string) string {
-	result := fmt.Sprintf("%s: %s", op.Operand, op.RelativePath)
-	if op.Value != nil {
-		result += "\n" + op.Value.Print(indent)
+func prefix(level int, isLast bool) string {
+	result := ""
+	for i := 0; i < level; i++ {
+		result += UI_V
 	}
+
+	if isLast {
+		result += UI_J
+	} else {
+		result += UI_T
+	}
+
 	return result
 }
 
-func Print(indent string, operations ...Operation) string {
-	result := ""
+func Print(op Operation) string {
+	var isLast bool
+	if value, ok := op.Value.(DirValue); ok {
+		isLast = len(value.Operations) == 0
+	} else {
+		isLast = true
+	}
 
-	for _, operation := range operations {
-		result += fmt.Sprintf(" %s - %s\n", indent, operation.Print(indent))
+	return print(op, 0, isLast)
+}
+
+func print(op Operation, level int, isLast bool) string {
+	result := prefix(level, isLast)
+
+	result += fmt.Sprintf("%s: ", op.Operand) + op.RelativePath
+
+	if value, ok := op.Value.(DirValue); ok {
+		length := len(value.Operations)
+		for index, op := range value.Operations {
+			result += "\n" + print(op, level+1, index >= length-1)
+		}
 	}
 
 	return result

@@ -49,7 +49,7 @@ func TestDiffWithDifferentCase(t *testing.T) {
 
 	// case sensitive
 	assert.Equal([]op.Operation{
-		op.NewCreateLink("B.md", "b.md", op.SYMBOLIC_LINK),
+		op.NewCreateLink("B.md", "b.md"),
 		op.NewUnlink("README.md"),
 		op.NewUnlink("a.md"),
 		op.NewUnlink("b.md"),
@@ -58,7 +58,7 @@ func TestDiffWithDifferentCase(t *testing.T) {
 	}, a.Diff(b))
 
 	assert.Equal([]op.Operation{
-		op.NewCreateLink("B.md", "b.md", op.SYMBOLIC_LINK),
+		op.NewCreateLink("B.md", "b.md"),
 		op.NewUnlink("a.md"),
 		op.NewUnlink("b.md"),
 		op.NewFileOperation("b.md"),
@@ -102,7 +102,7 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	assert.Equal([]op.Operation{
 		op.NewFileOperation("BUILD.bazel"),
 		op.NewFileOperation("README.md"),
-		op.NewCreateLink("a", "apple", op.SYMBOLIC_LINK),
+		op.NewCreateLink("a", "apple"),
 		op.NewMkdirOperation("apple"),
 		op.NewMkdirOperation("lib"),
 	}, a.Diff(b))
@@ -142,7 +142,7 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 		op.NewUnlink("BUILD.bazel"),
 		op.NewUnlink("d"),
 		op.NewRmdir("lib"),
-		op.NewCreateLink("d", "somewhere-else", op.SYMBOLIC_LINK),
+		op.NewCreateLink("d", "somewhere-else"),
 		op.NewFileOperation("notes.txt"),
 		op.NewMkdirOperation("orange"),
 	}, a.Diff(b))
@@ -226,12 +226,11 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 	})
 
 	assert.Equal(
-		readme.ChangeOperation("apple", op.Reason{}).Print(" "),
-		readme.ChangeOperation("apple", op.Reason{}).Print(" "),
+		op.Print(readme.ChangeOperation("apple", op.Reason{})),
+		op.Print(readme.ChangeOperation("apple", op.Reason{})),
 	)
 
 	expected := op.Print(
-		" ",
 		op.NewChangeFolderOperation("foo",
 			readme.ChangeOperation("README.md", op.Reason{
 				Type:   op.ContentChanged,
@@ -252,6 +251,6 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 
 	assert.Equal(
 		expected,
-		op.Print(" ", a.Diff(b)...),
+		op.Print(a.Diff(b)),
 	)
 }

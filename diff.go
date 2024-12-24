@@ -27,7 +27,7 @@ func sortStringsToLower(slice []string) {
 }
 
 // TODO: provide diffing without reason, and potentially different levels of reason
-func Diff(a, b *Folder, caseSensitive bool) []op.Operation {
+func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 	updates := []op.Operation{}
 	additions := []op.Operation{}
 	removals := []op.Operation{}
