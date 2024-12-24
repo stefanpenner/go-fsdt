@@ -7,7 +7,8 @@ type FileChangedValue struct {
 }
 
 func (f FileChangedValue) Print(indent string) string {
-	return fmt.Sprintf("%s %s", indent, f.Reason)
+	// return fmt.Sprintf("%s %s", indent, f.Reason)
+	return fmt.Sprintf("%s - %s", indent, "Because")
 }
 
 func NewFileOperation(relativePath string) Operation {

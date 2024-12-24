@@ -230,25 +230,28 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 		readme.ChangeOperation("apple", op.Reason{}).Print(" "),
 	)
 
-	assert.Equal(
-		op.Print(
-			" ",
-			op.NewChangeFolderOperation("foo",
+	expected := op.Print(
+		" ",
+		op.NewChangeFolderOperation("foo",
+			readme.ChangeOperation("README.md", op.Reason{
+				Type:   op.ContentChanged,
+				Before: []byte("## HI\n"),
+				After:  []byte("## BYE\n"),
+			}),
+			op.NewChangeFolderOperation("bar",
+				op.NewUnlink("a.md"),
 				readme.ChangeOperation("README.md", op.Reason{
 					Type:   op.ContentChanged,
 					Before: []byte("## HI\n"),
 					After:  []byte("## BYE\n"),
 				}),
-				op.NewChangeFolderOperation("bar",
-					op.NewUnlink("a.md"),
-					readme.ChangeOperation("README.md", op.Reason{
-						Type:   op.ContentChanged,
-						Before: []byte("## HI\n"),
-						After:  []byte("## BYE\n"),
-					}),
-					op.NewFileOperation("b.md"),
-				),
+				op.NewFileOperation("b.md"),
 			),
 		),
-		op.Print(" ", a.Diff(b)...))
+	)
+
+	assert.Equal(
+		expected,
+		op.Print(" ", a.Diff(b)...),
+	)
 }

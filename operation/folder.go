@@ -8,6 +8,10 @@ type DirValue struct {
 func (d DirValue) Print(indent string) string {
 	result := ""
 
+	for _, operation := range d.Operations {
+		result += operation.Print(indent+"  ") + "\n"
+	}
+
 	return result
 }
 

@@ -44,7 +44,9 @@ type Operation struct {
 
 func (op Operation) Print(indent string) string {
 	result := fmt.Sprintf("%s: %s", op.Operand, op.RelativePath)
-	result += op.Value.Print(indent)
+	if op.Value != nil {
+		result += "\n" + op.Value.Print(indent)
+	}
 	return result
 }
 
