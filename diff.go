@@ -26,12 +26,8 @@ func sortStringsToLower(slice []string) {
 	})
 }
 
-// TODO: provide diffing without reason, and potentially different levels of reason
 func Diff(a, b *Folder, caseSensitive bool) op.Operation {
-	result := a.ChangeOperation(".", op.Reason{})
-	// TODO: whats idiomatic?
-	// creates a copy of value
-	dirValue := result.Value.(op.DirValue)
+	dirValue := op.DirValue{}
 
 	a_index := 0
 	b_index := 0
@@ -71,10 +67,9 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 				a_entry := a_entry.(*Folder)
 				b_entry := b_entry.(*Folder)
 
-				// TODO: folder modes can change
+				// TODO: folder modes, permissions etc. can change
 				// they are both folders, so we recurse
 				operation := Diff(a_entry, b_entry, caseSensitive)
-				// this is a ChangeFolder opeation, insert it.
 
 				operation.RelativePath = b_key
 				if operation.Operand != op.Noop {
@@ -83,8 +78,10 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 			} else if a_type == FILE && b_type == FILE {
 				dirValue.AddOperations(a_entry.ChangeOperation(b_key, reason))
 			} else {
-				dirValue.AddOperations(a_entry.RemoveOperation(b_key, reason))
-				dirValue.AddOperations(b_entry.CreateOperation(b_key, reason))
+				dirValue.AddOperations(
+					a_entry.RemoveOperation(b_key, reason),
+					b_entry.CreateOperation(b_key, reason),
+				)
 			}
 
 			a_index++
@@ -122,6 +119,8 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 		// TODO: also check if the dirs themselves changed (mode, permissions)
 		return op.Nothing
 	}
+
+	result := a.ChangeOperation(".", op.Reason{})
 	result.Value = dirValue
 	return result
 }

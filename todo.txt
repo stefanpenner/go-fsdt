@@ -1,6 +1,13 @@
-- [ ] permissions
-- [ ] extended attributes
+- [ ] diffing
+  - [ ] permissions
+  - [ ] extended attributes
+  - [ ] when comparing two folders, the resulting op should include the appropriate folder name (probably just '.')
+  - [ ] when diffing provide different comparison approaches based on use-case
+    - [ ] existence
+    - [ ] atime / mtime / mode / permissions
+    - [ ] file content
+  - [ ] dial in reasons
 - [x] symlinks / hardlinks etc
-- [ ] easy to use in tests
-  - [ ] easy to do deep comparison
+- [x] easy to use in tests
+  - [x] easy to do deep comparison
 - [ ] easy to provide folder / files from other structures like a tar

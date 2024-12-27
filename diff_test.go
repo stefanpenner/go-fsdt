@@ -193,12 +193,10 @@ func TestDiffWithDepth(t *testing.T) {
 			op.NewUnlink("README.md"),
 			op.NewFileOperation("_README.md"),
 			op.NewMkdirOperation("_bar",
-
 				op.NewFileOperation("_README.md"),
 				op.NewFileOperation("_b.md"),
 			),
 			op.NewRmdir("bar",
-
 				op.NewUnlink("README.md"),
 				op.NewUnlink("a.md"),
 			),
