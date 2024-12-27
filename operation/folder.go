@@ -3,23 +3,24 @@ package operation
 type DirValue struct {
 	Reason     Reason
 	Operations []Operation
+	// TODO: mode, permisssions
+}
+
+func (d *DirValue) AddOperations(operations ...Operation) {
+	d.Operations = append(d.Operations, operations...)
 }
 
 func NewRmdir(relativePath string, operations ...Operation) Operation {
-	if len(operations) == 0 {
-		return Operation{
-			Operand:      Rmdir,
-			RelativePath: relativePath,
-			Value:        DirValue{},
+	var value DirValue
+	if len(operations) != 0 {
+		value = DirValue{
+			Operations: operations,
 		}
-	} else {
-		return Operation{
-			Operand:      Rmdir,
-			RelativePath: relativePath,
-			Value: DirValue{
-				Operations: operations,
-			},
-		}
+	}
+	return Operation{
+		Operand:      Rmdir,
+		RelativePath: relativePath,
+		Value:        value,
 	}
 }
 
@@ -34,19 +35,17 @@ func NewChangeFolderOperation(relativePath string, operations ...Operation) Oper
 }
 
 func NewMkdirOperation(relativePath string, operations ...Operation) Operation {
-	if len(operations) == 0 {
-		return Operation{
-			Operand:      Mkdir,
-			RelativePath: relativePath,
-			Value:        DirValue{},
+	var value DirValue
+
+	if len(operations) != 0 {
+		value = DirValue{
+			Operations: operations,
 		}
-	} else {
-		return Operation{
-			Operand:      Mkdir,
-			RelativePath: relativePath,
-			Value: DirValue{
-				Operations: operations,
-			},
-		}
+	}
+
+	return Operation{
+		Operand:      Mkdir,
+		RelativePath: relativePath,
+		Value:        value,
 	}
 }

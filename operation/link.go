@@ -1,5 +1,7 @@
 package operation
 
+import "fmt"
+
 type LinkType string
 
 const (
@@ -17,6 +19,10 @@ const (
 	CreateLink Operand = "CreateLink"
 )
 
+func (l LinkValue) Print(indent string, prefix string) string {
+	return fmt.Sprintf("%s%s -> %s", indent, prefix, l.Target)
+}
+
 func NewUnlink(relativePath string) Operation {
 	return Operation{
 		Operand:      Unlink,
@@ -24,17 +30,13 @@ func NewUnlink(relativePath string) Operation {
 	}
 }
 
-func NewCreateLink(relativePath string, target string, linkType LinkType) Operation {
-	if linkType == SYMBOLIC_LINK {
-		return Operation{
-			Operand:      CreateLink,
-			RelativePath: relativePath,
-			Value: LinkValue{
-				LinkType: linkType,
-				Target:   target,
-			},
-		}
-	} else {
-		panic("cannot create NewCreateLink that isn't a symlink") // TODO: unify and provide a good error
+func NewCreateLink(relativePath string, target string) Operation {
+	return Operation{
+		Operand:      CreateLink,
+		RelativePath: relativePath,
+		Value: LinkValue{
+			LinkType: SYMBOLIC_LINK,
+			Target:   target,
+		},
 	}
 }

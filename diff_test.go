@@ -12,16 +12,15 @@ func TestDiffStuffEmpty(t *testing.T) {
 
 	a := NewFolder()
 	b := NewFolder()
-	Nothing := []op.Operation{}
 
-	assert.Equal(Nothing, a.Diff(b))
+	assert.Equal(op.Nothing, a.Diff(b))
 }
 
 func TestDiffWithDifferentCase(t *testing.T) {
 	assert := assert.New(t)
 	// basically, we are case sensitive for now.
 	// TODO: handle case insensitivity, including Apples default approach.
-	// were files can be store case sensitively, but are resolved case
+	// were fires can be store case sensitively, but are resolved case
 	// insensitively. A file can be README.md or readme.md, but the file
 	// system will only store one of them, and allow a uniform access
 	// to the file.
@@ -47,22 +46,23 @@ func TestDiffWithDifferentCase(t *testing.T) {
 	b.FileString("keep.md", "## HI\n")
 	b.Symlink("B.md", "b.md")
 
-	// case sensitive
-	assert.Equal([]op.Operation{
-		op.NewCreateLink("B.md", "b.md", op.SYMBOLIC_LINK),
-		op.NewUnlink("README.md"),
-		op.NewUnlink("a.md"),
-		op.NewUnlink("b.md"),
-		op.NewFileOperation("b.md"),
-		op.NewFileOperation("readme.md"),
-	}, a.Diff(b))
+	assert.Equal(
+		op.NewChangeFolderOperation(".",
+			// case sensitive
+			op.NewCreateLink("B.md", "b.md"),
+			op.NewUnlink("README.md"),
+			op.NewUnlink("a.md"),
+			op.NewUnlink("b.md"),
+			op.NewFileOperation("b.md"),
+			op.NewFileOperation("readme.md"),
+		), a.Diff(b))
 
-	assert.Equal([]op.Operation{
-		op.NewCreateLink("B.md", "b.md", op.SYMBOLIC_LINK),
+	assert.Equal(op.NewChangeFolderOperation(".",
+		op.NewCreateLink("B.md", "b.md"),
 		op.NewUnlink("a.md"),
 		op.NewUnlink("b.md"),
 		op.NewFileOperation("b.md"),
-	}, a.CaseInsensitiveDiff(b))
+	), a.CaseInsensitiveDiff(b))
 }
 
 func TestDiffStuffAWithEmptyB(t *testing.T) {
@@ -78,13 +78,13 @@ func TestDiffStuffAWithEmptyB(t *testing.T) {
 	a.Folder("apple", func(f *Folder) {})
 	a.Symlink("a", "apple")
 
-	assert.Equal([]op.Operation{
+	assert.Equal(op.NewChangeFolderOperation(".",
 		op.NewUnlink("BUILD.bazel"),
 		op.NewUnlink("README.md"),
 		op.NewUnlink("a"),
 		op.NewRmdir("apple"),
 		op.NewRmdir("lib"),
-	}, a.Diff(b))
+	), a.Diff(b))
 }
 
 func TestDiffStuffBWithEmptyA(t *testing.T) {
@@ -99,13 +99,13 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	b.Folder("apple")
 	b.Symlink("a", "apple")
 
-	assert.Equal([]op.Operation{
+	assert.Equal(op.NewChangeFolderOperation(".",
 		op.NewFileOperation("BUILD.bazel"),
 		op.NewFileOperation("README.md"),
-		op.NewCreateLink("a", "apple", op.SYMBOLIC_LINK),
+		op.NewCreateLink("a", "apple"),
 		op.NewMkdirOperation("apple"),
 		op.NewMkdirOperation("lib"),
-	}, a.Diff(b))
+	), a.Diff(b))
 }
 
 func TestDiffStuffWithOverlap(t *testing.T) {
@@ -138,14 +138,14 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 	a.Folder("lib")
 	// lib is not in b
 
-	assert.Equal([]op.Operation{
+	assert.Equal(op.NewChangeFolderOperation(".",
 		op.NewUnlink("BUILD.bazel"),
 		op.NewUnlink("d"),
+		op.NewCreateLink("d", "somewhere-else"),
 		op.NewRmdir("lib"),
-		op.NewCreateLink("d", "somewhere-else", op.SYMBOLIC_LINK),
 		op.NewFileOperation("notes.txt"),
 		op.NewMkdirOperation("orange"),
-	}, a.Diff(b))
+	), a.Diff(b))
 }
 
 func TestWithContentDifferences(t *testing.T) {
@@ -154,16 +154,16 @@ func TestWithContentDifferences(t *testing.T) {
 	a := NewFolder()
 	b := NewFolder()
 
-	a.FileString("README.md", "## HI\n")
+	readme := a.FileString("README.md", "## HI\n")
 	b.FileString("README.md", "## Bye\n")
 
-	assert.Equal([]op.Operation{
-		op.FileChangedOperation("README.md", op.Reason{
+	assert.Equal(op.NewChangeFolderOperation(".",
+		readme.ChangeOperation("README.md", op.Reason{
 			Type:   op.ContentChanged,
 			Before: []byte("## HI\n"),
 			After:  []byte("## Bye\n"),
 		}),
-	}, a.Diff(b))
+	), a.Diff(b))
 }
 
 func TestDiffWithDepth(t *testing.T) {
@@ -188,19 +188,22 @@ func TestDiffWithDepth(t *testing.T) {
 		})
 	})
 
-	assert.Equal([]op.Operation{
+	assert.Equal(op.NewChangeFolderOperation(".",
 		op.NewChangeFolderOperation("foo",
 			op.NewUnlink("README.md"),
 			op.NewFileOperation("_README.md"),
 			op.NewMkdirOperation("_bar",
+
 				op.NewFileOperation("_README.md"),
 				op.NewFileOperation("_b.md"),
 			),
 			op.NewRmdir("bar",
+
 				op.NewUnlink("README.md"),
-				op.NewUnlink("a.md")),
+				op.NewUnlink("a.md"),
+			),
 		),
-	}, a.Diff(b))
+	), a.Diff(b))
 }
 
 func TestDiffWithDepthAndContent(t *testing.T) {
@@ -210,12 +213,12 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 	b := NewFolder()
 
 	a.Folder("foo", func(f *Folder) {
-		f.FileString("README.md", "## HI\n")
 		f.Folder("bar", func(f *Folder) {
 			f.FileString("a.md", "## HI\n")
 			f.FileString("README.md", "## HI\n")
 		})
 	})
+	readme := a.FileString("README.md", "## HI\n")
 
 	b.Folder("foo", func(f *Folder) {
 		f.FileString("README.md", "## BYE\n")
@@ -225,22 +228,32 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 		})
 	})
 
-	assert.Equal([]op.Operation{
-		op.NewChangeFolderOperation("foo",
-			op.FileChangedOperation("README.md", op.Reason{
-				Type:   op.ContentChanged,
-				Before: []byte("## HI\n"),
-				After:  []byte("## BYE\n"),
-			}),
-			op.NewChangeFolderOperation("bar",
-				op.NewUnlink("a.md"),
-				op.FileChangedOperation("README.md", op.Reason{
-					Type:   op.ContentChanged,
-					Before: []byte("## HI\n"),
-					After:  []byte("## BYE\n"),
-				}),
-				op.NewFileOperation("b.md"),
+	assert.Equal(
+		op.Print(readme.ChangeOperation("apple", op.Reason{})),
+		op.Print(readme.ChangeOperation("apple", op.Reason{})),
+	)
+
+	expected := op.Print(
+		op.NewChangeFolderOperation(".",
+			readme.RemoveOperation("README.md", op.Reason{}),
+			op.NewChangeFolderOperation("foo",
+				op.NewFileOperation("README.md"),
+				op.NewChangeFolderOperation("bar",
+
+					readme.ChangeOperation("README.md", op.Reason{
+						Type:   op.ContentChanged,
+						Before: []byte("## HI\n"),
+						After:  []byte("## BYE\n"),
+					}),
+					op.NewUnlink("a.md"),
+					op.NewFileOperation("b.md"),
+				),
 			),
 		),
-	}, a.Diff(b))
+	)
+
+	assert.Equal(
+		expected,
+		op.Print(a.Diff(b)),
+	)
 }
