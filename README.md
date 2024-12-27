@@ -86,35 +86,30 @@ clone := folder.Clone().(*Folder)
 folder.Diff(folder) // => []
 new_folder.Diff(folder) // => []
 
-
 // let's remove a folder and file
 err = folder.Remove("lib")
 
 // now there should be a diff, notice the diff is structure for efficient disk
 // transformations.
-assert.Equal([]Operation{
-	{
-		RelativePath: "lib",
-		Operand: Mkdir,
-    Operations: []Operation {
-      {
-        RelativePath: "Empty.txt",
-        Operand: Create
-      }
+assert.Equal(op.Operation{
+  RelativePath: "lib",
+  Operand: Mkdir,
+  Operations: []Operation {
+    {
+      RelativePath: "Empty.txt",
+      Operand: Create
     }
-	},
+  }
 }, folder.Diff(clone.(*Folder)))
 
 // and this should be the reverse.
-assert.Equal([]Operation{
-  {
-    RelativePath: "lib",
-    Operand:      Rmdir,
-    Operations: []Operation{
-      {
-        RelativePath: "Empty.txt",
-        Operand:      Unlink,
-      },
+assert.Equal(op.Operation{
+  RelativePath: "lib",
+  Operand:      Rmdir,
+  Operations: []Operation{
+    {
+      RelativePath: "Empty.txt",
+      Operand:      Unlink,
     },
   },
 }, clone.(*Folder).Diff(folder))
