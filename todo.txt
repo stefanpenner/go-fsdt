@@ -1,5 +1,8 @@
-- [ ] diffing
+- [ ] cleanup code organization. For exsample the namespacing of Operations,Operands etc are confusing
+- [ ] explore a cleaner serialization approach to nice diffable output
+- [ ] improve diffing
   - [ ] permissions
+  - [ ] mode
   - [ ] extended attributes
   - [ ] when comparing two folders, the resulting op should include the appropriate folder name (probably just '.')
   - [ ] when diffing provide different comparison approaches based on use-case
