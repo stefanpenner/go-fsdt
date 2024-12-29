@@ -147,12 +147,21 @@ func TestFolderToDirAndBack(t *testing.T) {
 
 	t.Run("check if we can populate a folder from disk", func(t *testing.T) {
 		assert := assert.New(t)
+		require := require.New(t)
+
 		newFolder := NewFolder()
 		assert.Equal([]string{}, newFolder.Entries(), "has no files")
 		newFolder.ReadFrom(folderRoot)
-		assert.Equal([]string{"README.md", "lib"}, newFolder.Entries())
+		other, error := ReadFrom(folderRoot)
+		require.NoError(error)
 
-		assert.Equal(folder.Get("README.md").ContentString(), "## HI\n")
+		assert.Equal([]string{"README.md", "lib"}, newFolder.Entries())
+		assert.Equal([]string{"README.md", "lib"}, other.Entries())
+
+		assert.Equal(newFolder.Get("README.md").ContentString(), "## HI\n")
+		assert.Equal(other.Get("README.md").ContentString(), "## HI\n")
+
+		assert.Equal(op.Nothing, newFolder.Diff(other))
 	})
 }
 

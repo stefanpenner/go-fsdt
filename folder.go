@@ -190,6 +190,12 @@ func (f *Folder) WriteTo(location string) error {
 	return nil
 }
 
+func ReadFrom(path string) (*Folder, error) {
+	folder := NewFolder()
+	error := folder.ReadFrom(path)
+	return folder, error
+}
+
 func (f *Folder) ReadFrom(path string) error {
 	dirs, err := os.ReadDir(path)
 	if err != nil {

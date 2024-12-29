@@ -70,11 +70,9 @@ err := folder.WriteTo("/path/to/somewhere")
 
 // now /path/to/somewhere has the contents of folder
 
-// let's create a second folder
-newFolder := fsdt.NewFolder()
-
-// populate it from the path we just wrote
-newFolder.ReadFrom("/path/to/somewhere")
+// let's create a new folder from disk
+newFolder, error := fsdt.ReadFrom("/path/to/somewhere")
+require.NoError(err)
 
 // let's compare the two, but they are the same so it's boring
 newFolder.Diff(folder) // => []
