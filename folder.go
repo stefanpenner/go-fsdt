@@ -286,11 +286,13 @@ func (f *Folder) Content() []byte {
 }
 
 func (f *Folder) Diff(b *Folder) op.Operation {
-	return Diff(f, b, true)
+	return Diff(f, b, DefaultDiffOptions())
 }
 
 func (f *Folder) CaseInsensitiveDiff(b *Folder) op.Operation {
-	return Diff(f, b, false)
+	options := DefaultDiffOptions()
+	options.CaseSensitive = false
+	return Diff(f, b, options)
 }
 
 func (f *Folder) ContentString() string {

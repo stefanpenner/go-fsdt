@@ -152,7 +152,7 @@ func BenchmarkDiffOperations(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		start := time.Now()
-		diff := Diff(folder1, folder2, true)
+		diff := Diff(folder1, folder2, DefaultDiffOptions())
 		diffTime := time.Since(start)
 
 		if diffTime > MaxDiffTime {
@@ -207,7 +207,7 @@ func BenchmarkStressTest(b *testing.B) {
 		// Perform operations
 		clone := root.Clone()
 		cloneFolder := clone.(*Folder)
-		diff := Diff(root, cloneFolder, true)
+		diff := Diff(root, cloneFolder, DefaultDiffOptions())
 
 		if diff.IsNoop() {
 			b.Error("Diff should contain operations")
@@ -310,7 +310,7 @@ func TestPerformanceThresholds(t *testing.T) {
 		folder2.File("extra.txt", FileOptions{Content: []byte("extra content"), Mode: 0644})
 
 		start := time.Now()
-		diff := Diff(folder1, folder2, true)
+		diff := Diff(folder1, folder2, DefaultDiffOptions())
 		diffTime := time.Since(start)
 
 		if diffTime > MaxDiffTime {
@@ -337,7 +337,7 @@ func TestMemoryLeaks(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		clone := root.Clone()
 		cloneFolder := clone.(*Folder)
-		diff := Diff(root, cloneFolder, true)
+		diff := Diff(root, cloneFolder, DefaultDiffOptions())
 
 		// Identical folders should have no diff operations
 		if !diff.IsNoop() {

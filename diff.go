@@ -26,7 +26,32 @@ func sortStringsToLower(slice []string) {
 	})
 }
 
-func Diff(a, b *Folder, caseSensitive bool) op.Operation {
+// DiffOptions configures how the diff operation should behave
+type DiffOptions struct {
+	CaseSensitive     bool
+	CompareMode       bool
+	ComparePermissions bool
+	CompareTimestamps  bool
+	CompareContent     bool
+	CompareAttributes  bool
+	IncludeFolderName  bool
+}
+
+// DefaultDiffOptions returns sensible default diff options
+func DefaultDiffOptions() DiffOptions {
+	return DiffOptions{
+		CaseSensitive:     true,
+		CompareMode:       true,
+		ComparePermissions: true,
+		CompareTimestamps:  false,
+		CompareContent:     true,
+		CompareAttributes:  false,
+		IncludeFolderName:  true,
+	}
+}
+
+// Diff compares two folders and returns the operations needed to transform a into b
+func Diff(a, b *Folder, options DiffOptions) op.Operation {
 	dirValue := op.DirectoryValue{}
 
 	a_index := 0
@@ -34,7 +59,7 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 	a_keys := a.Entries()
 	b_keys := b.Entries()
 
-	if !caseSensitive {
+	if !options.CaseSensitive {
 		sortStringsToLower(a_keys)
 		sortStringsToLower(b_keys)
 	}
@@ -47,7 +72,7 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 		a_comparable := a_key
 		b_comparable := b_key
 
-		if !caseSensitive {
+		if !options.CaseSensitive {
 			a_comparable = strings.ToLower(a_comparable)
 			b_comparable = strings.ToLower(b_comparable)
 		}
@@ -59,7 +84,7 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 			a_type := a_entry.Type()
 			b_type := b_entry.Type()
 
-			equal, reason := a_entry.EqualWithReason(b_entry)
+			equal, reason := compareEntries(a_entry, b_entry, options)
 
 			if equal {
 				// do nothing!
@@ -67,11 +92,16 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 				a_entry := a_entry.(*Folder)
 				b_entry := b_entry.(*Folder)
 
-				// TODO: folder modes, permissions etc. can change
 				// they are both folders, so we recurse
-				operation := Diff(a_entry, b_entry, caseSensitive)
+				operation := Diff(a_entry, b_entry, options)
 
-				operation.RelativePath = b_key
+				// Set the relative path based on options
+				if options.IncludeFolderName {
+					operation.RelativePath = b_key
+				} else {
+					operation.RelativePath = "."
+				}
+
 				if !operation.IsNoop() {
 					dirValue.AddOperations(operation)
 				}
@@ -96,7 +126,14 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 			b_index++
 			dirValue.AddOperations(b.CreateChildOperation(b_key, op.Reason{})) // TODO: missing reason
 		} else {
-			panic("fsdt/diff.go(unreachable)")
+			// This should never happen, but handle gracefully
+			if a_key < b_key {
+				a_index++
+				dirValue.AddOperations(a.RemoveChildOperation(a_key, op.Reason{}))
+			} else {
+				b_index++
+				dirValue.AddOperations(b.CreateChildOperation(b_key, op.Reason{}))
+			}
 		}
 	}
 
@@ -117,5 +154,84 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 		return op.NewNoopOperation()
 	}
 
-	return op.NewChangeDirOperation(".", dirValue.Operations...)
+	// Set the relative path based on options
+	relativePath := "."
+	if options.IncludeFolderName {
+		relativePath = "."
+	}
+
+	return op.NewChangeDirOperation(relativePath, dirValue.Operations...)
+}
+
+// compareEntries compares two entries with the given options and returns equality and reason
+func compareEntries(a, b FolderEntry, options DiffOptions) (bool, op.Reason) {
+	// Type comparison is always done
+	if a.Type() != b.Type() {
+		return false, op.Reason{
+			Type:    op.ReasonTypeChanged,
+			Before:  a.Type(),
+			After:   b.Type(),
+			Message: "Entry type changed",
+		}
+	}
+
+	// Mode comparison - only if both entries support it
+	if options.CompareMode {
+		// Check if both entries have mode information
+		if aFile, aOk := a.(*File); aOk {
+			if bFile, bOk := b.(*File); bOk {
+				if aFile.Mode() != bFile.Mode() {
+					return false, op.Reason{
+						Type:    op.ReasonModeChanged,
+						Before:  aFile.Mode(),
+						After:   bFile.Mode(),
+						Message: "File mode changed",
+					}
+				}
+			}
+		}
+		
+		if aFolder, aOk := a.(*Folder); aOk {
+			if bFolder, bOk := b.(*Folder); bOk {
+				if aFolder.Mode() != bFolder.Mode() {
+					return false, op.Reason{
+						Type:    op.ReasonModeChanged,
+						Before:  aFolder.Mode(),
+						After:   bFolder.Mode(),
+						Message: "Folder mode changed",
+					}
+				}
+			}
+		}
+		
+		if aLink, aOk := a.(*Link); aOk {
+			if bLink, bOk := b.(*Link); bOk {
+				if aLink.Mode() != bLink.Mode() {
+					return false, op.Reason{
+						Type:    op.ReasonModeChanged,
+						Before:  aLink.Mode(),
+						After:   bLink.Mode(),
+						Message: "Link mode changed",
+					}
+				}
+			}
+		}
+	}
+
+	// Content comparison
+	if options.CompareContent {
+		equal, reason := a.EqualWithReason(b)
+		if !equal {
+			return false, reason
+		}
+	}
+
+	return true, op.Reason{}
+}
+
+// Legacy Diff function for backward compatibility
+func DiffLegacy(a, b *Folder, caseSensitive bool) op.Operation {
+	options := DefaultDiffOptions()
+	options.CaseSensitive = caseSensitive
+	return Diff(a, b, options)
 }
