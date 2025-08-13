@@ -32,7 +32,7 @@ func NewFolder(cb ...func(f *Folder)) *Folder {
 }
 
 func (f *Folder) Entries() []string {
-	entries := []string{}
+	entries := make([]string, 0, len(f._entries))
 	for name := range f._entries {
 		entries = append(entries, name)
 	}
@@ -47,7 +47,7 @@ func (f *Folder) Mode() os.FileMode {
 }
 
 func (f *Folder) RemoveOperation(relativePath string, reason op.Reason) op.Operation {
-	operations := []op.Operation{}
+	operations := make([]op.Operation, 0, len(f._entries))
 	for _, entryName := range f.Entries() {
 		entry := f._entries[entryName]
 		operations = append(operations, entry.RemoveOperation(entryName, reason))
@@ -81,7 +81,7 @@ func (f *Folder) RemoveChildOperation(relativePath string, reason op.Reason) op.
 }
 
 func (f *Folder) CreateOperation(relativePath string, reason op.Reason) op.Operation {
-	operations := []op.Operation{}
+	operations := make([]op.Operation, 0, len(f._entries))
 
 	for _, entryName := range f.Entries() {
 		entry := f._entries[entryName]

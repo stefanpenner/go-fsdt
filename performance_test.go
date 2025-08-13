@@ -356,12 +356,17 @@ func TestConcurrentSafety(t *testing.T) {
 		done := make(chan bool, 10)
 
 		for i := 0; i < 10; i++ {
+			// Capture the loop variable explicitly to avoid race conditions
+			workerID := i
 			go func() {
 				defer func() { done <- true }()
 
 				// Perform read operations
 				_ = folder.Entries()
 				_ = folder.Get("file1.txt")
+
+				// Log which worker is executing (for debugging)
+				t.Logf("Worker %d completed read operations", workerID)
 			}()
 		}
 
@@ -376,6 +381,8 @@ func TestConcurrentSafety(t *testing.T) {
 		done := make(chan bool, 5)
 
 		for i := 0; i < 5; i++ {
+			// Capture the loop variable explicitly to avoid race conditions
+			workerID := i
 			go func() {
 				defer func() { done <- true }()
 
@@ -383,6 +390,9 @@ func TestConcurrentSafety(t *testing.T) {
 				if !folder.Equal(clone) {
 					t.Error("Clone should equal original")
 				}
+
+				// Log which worker is executing (for debugging)
+				t.Logf("Worker %d completed clone operations", workerID)
 			}()
 		}
 

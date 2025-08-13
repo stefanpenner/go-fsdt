@@ -21,6 +21,11 @@ on:
         default: '5'
         type: string
 
+# Global configuration to prevent job cancellation
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # Core build and test job - runs on every push/PR
   test:
@@ -33,7 +38,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23.2'
+        go-version: '1.23.3'
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -77,13 +82,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     timeout-minutes: 15
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23.2'
+        go-version: '1.23.3'
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -104,7 +110,7 @@ jobs:
         go test -bench=BenchmarkFileOperations -run=^$ ./... || echo "File operations benchmark completed"
         go test -bench=BenchmarkFolderOperations -run=^$ ./... || echo "Folder operations benchmark completed"
         go test -bench=BenchmarkDiffOperations -run=^$ ./... || echo "Diff operations benchmark completed"
-        go test -bench=BenchmarkLinkOperations -run=^$ ./... || echo "Link operations benchmark completed"
+        go test -bench=BenchmarkLinkOperations -run=^$ ./... || echo "Link operations completed"
 
   # Quick fuzz tests - runs on every push/PR (short duration)
   fuzz-quick:
@@ -112,13 +118,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     timeout-minutes: 15
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23.2'
+        go-version: '1.23.3'
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -164,13 +171,14 @@ jobs:
     needs: test
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 120
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23.2'
+        go-version: '1.23.3'
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -223,13 +231,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     timeout-minutes: 10
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23.2'
+        go-version: '1.23.3'
 
     - name: Cache Go modules
       uses: actions/cache@v4

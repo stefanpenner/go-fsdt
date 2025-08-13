@@ -14,8 +14,9 @@ func NewRmdir(relativePath string, operations ...Operation) Operation {
 	var value DirValue
 	if len(operations) != 0 {
 		value = DirValue{
-			Operations: operations,
+			Operations: make([]Operation, 0, len(operations)),
 		}
+		value.AddOperations(operations...)
 	}
 	return Operation{
 		Operand:      Rmdir,
@@ -29,7 +30,7 @@ func NewChangeFolderOperation(relativePath string, operations ...Operation) Oper
 		Operand:      ChangeFolder,
 		RelativePath: relativePath,
 		Value: DirValue{
-			Operations: operations,
+			Operations: make([]Operation, 0, len(operations)),
 		},
 	}
 }
@@ -39,8 +40,9 @@ func NewMkdirOperation(relativePath string, operations ...Operation) Operation {
 
 	if len(operations) != 0 {
 		value = DirValue{
-			Operations: operations,
+			Operations: make([]Operation, 0, len(operations)),
 		}
+		value.AddOperations(operations...)
 	}
 
 	return Operation{
