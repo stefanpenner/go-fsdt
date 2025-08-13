@@ -32,7 +32,7 @@ func NewFolder(cb ...func(f *Folder)) *Folder {
 }
 
 func (f *Folder) Entries() []string {
-	entries := []string{}
+	entries := make([]string, 0, len(f._entries))
 	for name := range f._entries {
 		entries = append(entries, name)
 	}
@@ -47,10 +47,10 @@ func (f *Folder) Mode() os.FileMode {
 }
 
 func (f *Folder) RemoveOperation(relativePath string, reason op.Reason) op.Operation {
-	operations := []op.Operation{}
-	for _, relativePath := range f.Entries() {
-		entry := f._entries[relativePath]
-		operations = append(operations, entry.RemoveOperation(relativePath, reason))
+	operations := make([]op.Operation, 0, len(f._entries))
+	for _, entryName := range f.Entries() {
+		entry := f._entries[entryName]
+		operations = append(operations, entry.RemoveOperation(entryName, reason))
 	}
 
 	// TODO: reason
@@ -81,11 +81,11 @@ func (f *Folder) RemoveChildOperation(relativePath string, reason op.Reason) op.
 }
 
 func (f *Folder) CreateOperation(relativePath string, reason op.Reason) op.Operation {
-	operations := []op.Operation{}
+	operations := make([]op.Operation, 0, len(f._entries))
 
-	for _, relativePath := range f.Entries() {
-		entry := f._entries[relativePath]
-		operations = append(operations, entry.CreateOperation(relativePath, reason))
+	for _, entryName := range f.Entries() {
+		entry := f._entries[entryName]
+		operations = append(operations, entry.CreateOperation(entryName, reason))
 	}
 
 	return op.NewMkdirOperation(relativePath, operations...)
@@ -135,6 +135,7 @@ func (f *Folder) Hardlink(link string, target string) *Link {
 
 func (f *Folder) Clone() FolderEntry {
 	clone := NewFolder()
+	clone.mode = f.mode
 	for name, entry := range f._entries {
 		clone._entries[name] = entry.Clone()
 	}
@@ -205,12 +206,12 @@ func (f *Folder) ReadFrom(path string) error {
 	for _, entry := range dirs {
 		if entry.IsDir() {
 			folder := f.Folder(entry.Name(), func(f *Folder) {})
-			err = folder.ReadFrom(path + "/" + entry.Name())
+			err = folder.ReadFrom(filepath.Join(path, entry.Name()))
 			if err != nil {
 				return err
 			}
 		} else if entry.Type().IsRegular() {
-			content, err := os.ReadFile(path + "/" + entry.Name())
+			content, err := os.ReadFile(filepath.Join(path, entry.Name()))
 			if err != nil {
 				return err
 			}
@@ -223,7 +224,7 @@ func (f *Folder) ReadFrom(path string) error {
 				Mode:    info.Mode(),
 			})
 		} else if entry.Type()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(path + "/" + entry.Name())
+			target, err := os.Readlink(filepath.Join(path, entry.Name()))
 			if err != nil {
 				return err
 			}
@@ -242,12 +243,62 @@ func (f *Folder) Type() FolderEntryType {
 }
 
 func (f *Folder) Equal(entry FolderEntry) bool {
-	return false
+	equal, _ := f.EqualWithReason(entry)
+	return equal
 }
 
 func (f *Folder) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
-	// TODO: deal with MODE
-	return false, op.Reason{}
+	// Check if the other entry is also a folder
+	otherFolder, isFolder := entry.(*Folder)
+	if !isFolder {
+		return false, op.Reason{
+			Type:   op.TypeChanged,
+			Before: f.Type(),
+			After:  entry.Type(),
+		}
+	}
+
+	// Check if modes are different
+	if f.mode != otherFolder.mode {
+		return false, op.Reason{
+			Type:   op.ModeChanged,
+			Before: f.mode,
+			After:  otherFolder.mode,
+		}
+	}
+
+	// Check if they have the same number of entries
+	if len(f._entries) != len(otherFolder._entries) {
+		return false, op.Reason{
+			Type:   op.ContentChanged,
+			Before: len(f._entries),
+			After:  len(otherFolder._entries),
+		}
+	}
+
+	// Check if all entries are equal
+	for name, fEntry := range f._entries {
+		otherEntry, exists := otherFolder._entries[name]
+		if !exists {
+			return false, op.Reason{
+				Type:   op.Missing,
+				Before: name,
+				After:  nil,
+			}
+		}
+
+		equal, reason := fEntry.EqualWithReason(otherEntry)
+		if !equal {
+			// Update the path to include the entry name
+			if reason.Type != "" {
+				reason.Before = name + "/" + fmt.Sprintf("%v", reason.Before)
+				reason.After = name + "/" + fmt.Sprintf("%v", reason.After)
+			}
+			return false, reason
+		}
+	}
+
+	return true, op.Reason{}
 }
 
 func (f *Folder) HasContent() bool {

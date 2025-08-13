@@ -64,7 +64,6 @@ func (l *Link) CreateOperation(relativePath string, reason op.Reason) op.Operati
 
 func (l *Link) ChangeOperation(relativePath string, reason op.Reason, operations ...op.Operation) op.Operation {
 	panic("no implemented")
-	return op.Operation{}
 }
 
 func (l *Link) Equal(entry FolderEntry) bool {
@@ -78,7 +77,7 @@ func (l *Link) Equal(entry FolderEntry) bool {
 func (l *Link) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
 	other, ok := entry.(*Link)
 	if !ok {
-		return false, op.Reason{Type: op.TypeChanged, Before: SYMLINK, After: entry.Type()}
+		return false, op.Reason{Type: op.TypeChanged, Before: l.link_type, After: entry.Type()}
 	}
 	if l.target != other.target {
 		return false, op.Reason{Type: op.ContentChanged, Before: l.target, After: other.target}
