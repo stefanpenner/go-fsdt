@@ -33,7 +33,7 @@ func NewFile(content ...FileOptions) *File {
 	}
 
 	mode := content[0].Mode
-	if mode <= 0 {
+	if mode == 0 {
 		mode = DEFAULT_FILE_MODE
 	}
 	return &File{

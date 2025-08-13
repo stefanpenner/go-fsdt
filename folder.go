@@ -48,9 +48,9 @@ func (f *Folder) Mode() os.FileMode {
 
 func (f *Folder) RemoveOperation(relativePath string, reason op.Reason) op.Operation {
 	operations := []op.Operation{}
-	for _, relativePath := range f.Entries() {
-		entry := f._entries[relativePath]
-		operations = append(operations, entry.RemoveOperation(relativePath, reason))
+	for _, entryName := range f.Entries() {
+		entry := f._entries[entryName]
+		operations = append(operations, entry.RemoveOperation(entryName, reason))
 	}
 
 	// TODO: reason
@@ -83,9 +83,9 @@ func (f *Folder) RemoveChildOperation(relativePath string, reason op.Reason) op.
 func (f *Folder) CreateOperation(relativePath string, reason op.Reason) op.Operation {
 	operations := []op.Operation{}
 
-	for _, relativePath := range f.Entries() {
-		entry := f._entries[relativePath]
-		operations = append(operations, entry.CreateOperation(relativePath, reason))
+	for _, entryName := range f.Entries() {
+		entry := f._entries[entryName]
+		operations = append(operations, entry.CreateOperation(entryName, reason))
 	}
 
 	return op.NewMkdirOperation(relativePath, operations...)
@@ -135,6 +135,7 @@ func (f *Folder) Hardlink(link string, target string) *Link {
 
 func (f *Folder) Clone() FolderEntry {
 	clone := NewFolder()
+	clone.mode = f.mode
 	for name, entry := range f._entries {
 		clone._entries[name] = entry.Clone()
 	}
@@ -205,12 +206,12 @@ func (f *Folder) ReadFrom(path string) error {
 	for _, entry := range dirs {
 		if entry.IsDir() {
 			folder := f.Folder(entry.Name(), func(f *Folder) {})
-			err = folder.ReadFrom(path + "/" + entry.Name())
+			err = folder.ReadFrom(filepath.Join(path, entry.Name()))
 			if err != nil {
 				return err
 			}
 		} else if entry.Type().IsRegular() {
-			content, err := os.ReadFile(path + "/" + entry.Name())
+			content, err := os.ReadFile(filepath.Join(path, entry.Name()))
 			if err != nil {
 				return err
 			}
@@ -223,7 +224,7 @@ func (f *Folder) ReadFrom(path string) error {
 				Mode:    info.Mode(),
 			})
 		} else if entry.Type()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(path + "/" + entry.Name())
+			target, err := os.Readlink(filepath.Join(path, entry.Name()))
 			if err != nil {
 				return err
 			}
