@@ -35,6 +35,16 @@ jobs:
       with:
         go-version: '1.23.2'
 
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
     - name: Build
       run: go build -v ./...
 
@@ -75,6 +85,16 @@ jobs:
       with:
         go-version: '1.23.2'
 
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
     - name: Run Performance Tests
       run: go test -v -run "TestPerformance|TestMemory|TestConcurrent" ./...
 
@@ -99,6 +119,24 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.23.2'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Cache Fuzz Corpus
+      uses: actions/cache@v4
+      with:
+        path: testdata/fuzz/
+        key: ${{ runner.os }}-fuzz-corpus-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-fuzz-corpus-
 
     - name: Run All Quick Fuzz Tests
       run: |
@@ -133,6 +171,24 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.23.2'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Cache Fuzz Corpus
+      uses: actions/cache@v4
+      with:
+        path: testdata/fuzz/
+        key: ${{ runner.os }}-fuzz-corpus-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-fuzz-corpus-
 
     - name: Download Previous Corpus
       uses: actions/download-artifact@v4
@@ -174,6 +230,16 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.23.2'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
     - name: Check for known vulnerabilities
       run: |
