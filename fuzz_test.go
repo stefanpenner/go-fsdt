@@ -517,7 +517,7 @@ func testFolderOperations(t *testing.T, folder *Folder, fileName, content string
 		if entry == nil {
 			t.Fatalf("Failed to get entry %s for verification", firstEntry)
 		}
-		
+
 		// Test that we can get the entry type
 		entryType := entry.Type()
 		if entryType == "" {
