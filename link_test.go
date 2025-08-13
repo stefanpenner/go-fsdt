@@ -82,11 +82,11 @@ func TestSymlink(t *testing.T) {
 
 			equal, reason = symlink.EqualWithReason(a)
 			assert.False(equal)
-			assert.Equal(op.Reason{Type: op.ContentChanged, Before: "to", After: "not-to"}, reason)
+			assert.Equal(op.Reason{Type: op.ReasonContentChanged, Before: "to", After: "not-to"}, reason)
 
 			equal, reason = symlink.EqualWithReason(b)
 			assert.False(equal)
-			assert.Equal(op.Reason{Type: op.ContentChanged, Before: "to", After: "from"}, reason)
+			assert.Equal(op.Reason{Type: op.ReasonContentChanged, Before: "to", After: "from"}, reason)
 
 			equal, reason = b.EqualWithReason(c)
 			assert.True(equal)
@@ -115,6 +115,6 @@ func TestSymlink(t *testing.T) {
 
 		// Test diffing
 		diff := folder.Diff(loadedFolder)
-		assert.Equal(op.Nothing, diff, "Folders should be identical after load")
+		assert.True(diff.IsNoop(), "Folders should be identical after load")
 	})
 }

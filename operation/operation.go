@@ -2,89 +2,131 @@ package operation
 
 import "fmt"
 
-type (
-	Operand string
-)
+// OperationType represents the type of file system operation
+type OperationType string
 
-// TODO: Create -> CreateFile
+// File system operation constants
 const (
-	Create       Operand = "CreateFile"
-	ChangeFile   Operand = "ChangeFile"
-	ChangeFolder Operand = "ChangeDir"
-	Rmdir        Operand = "Rmdir"
-	Mkdir        Operand = "Mkdir"
-	Noop         Operand = "noop"
+	// File operations
+	CreateFile OperationType = "CreateFile"
+	RemoveFile OperationType = "RemoveFile"
+	ChangeFile OperationType = "ChangeFile"
+
+	// Directory operations
+	CreateDir OperationType = "CreateDir"
+	RemoveDir OperationType = "RemoveDir"
+	ChangeDir OperationType = "ChangeDir"
+
+	// Link operations
+	CreateLink OperationType = "CreateLink"
+	RemoveLink OperationType = "RemoveLink"
+	ChangeLink OperationType = "ChangeLink"
+
+	// Special operations
+	Noop OperationType = "Noop"
 )
 
-const (
-	UI_T = "├── "
-	UI_V = "│   "
-	UI_J = "└── "
-)
-
-type Reason struct {
-	Before interface{}
-	After  interface{}
-	Type   ReasonType
+// Operation represents a file system operation
+type Operation struct {
+	RelativePath string
+	Type         OperationType
+	Value        OperationValue
+	Reason       *Reason
 }
 
-// TODDO: expand reason from enum, to struct (before / after)
+// OperationValue represents the value associated with an operation
+type OperationValue interface {
+	// String returns a string representation of the value
+	String() string
+}
+
+// Reason explains why an operation is needed
+type Reason struct {
+	Type    ReasonType
+	Before  interface{}
+	After   interface{}
+	Message string
+}
+
+// ReasonType categorizes the reason for an operation
 type ReasonType string
 
 const (
-	TypeChanged    ReasonType = "Type Changed"
-	ModeChanged    ReasonType = "Mode Changed"
-	ContentChanged ReasonType = "Content Changed"
-	Missing        ReasonType = "Missing"
-	Because        ReasonType = "because"
+	ReasonTypeChanged    ReasonType = "TypeChanged"
+	ReasonModeChanged    ReasonType = "ModeChanged"
+	ReasonContentChanged ReasonType = "ContentChanged"
+	ReasonMissing        ReasonType = "Missing"
+	ReasonNew            ReasonType = "New"
+	ReasonPermissions    ReasonType = "Permissions"
+	ReasonTimestamps     ReasonType = "Timestamps"
+	ReasonAttributes     ReasonType = "Attributes"
 )
 
-type Operation struct {
-	RelativePath string
-	Value        Value
-	Operand      Operand
+// NewOperation creates a new operation with the given parameters
+func NewOperation(relativePath string, opType OperationType, value OperationValue, reason *Reason) Operation {
+	return Operation{
+		RelativePath: relativePath,
+		Type:         opType,
+		Value:        value,
+		Reason:       reason,
+	}
 }
 
-var Nothing = Operation{
-	Operand: Noop,
+// NewNoopOperation creates a no-operation
+func NewNoopOperation() Operation {
+	return Operation{
+		Type: Noop,
+	}
 }
 
-func prefix(level int, isLast bool) string {
-	result := ""
-	for i := 0; i < level; i++ {
-		result += UI_V
+// IsNoop returns true if this is a no-operation
+func (o Operation) IsNoop() bool {
+	return o.Type == Noop
+}
+
+// String returns a string representation of the operation
+func (o Operation) String() string {
+	if o.IsNoop() {
+		return "Noop"
 	}
 
-	if isLast {
-		result += UI_J
-	} else {
-		result += UI_T
+	result := fmt.Sprintf("%s: %s", o.Type, o.RelativePath)
+
+	if o.Value != nil {
+		result += fmt.Sprintf(" (%s)", o.Value.String())
+	}
+
+	if o.Reason != nil {
+		result += fmt.Sprintf(" [%s]", o.Reason.String())
 	}
 
 	return result
 }
 
-func Print(op Operation) string {
-	var isLast bool
-	if value, ok := op.Value.(DirValue); ok {
-		isLast = len(value.Operations) == 0
-	} else {
-		isLast = true
+// String returns a string representation of the reason
+func (r *Reason) String() string {
+	if r == nil {
+		return ""
 	}
 
-	return print(op, 0, isLast)
-}
+	result := string(r.Type)
 
-func print(op Operation, level int, isLast bool) string {
-	result := prefix(level, isLast)
+	if r.Message != "" {
+		result += ": " + r.Message
+	}
 
-	result += fmt.Sprintf("%s: ", op.Operand) + op.RelativePath
-
-	if value, ok := op.Value.(DirValue); ok {
-		length := len(value.Operations)
-		for index, op := range value.Operations {
-			result += "\n" + print(op, level+1, index >= length-1)
+	if r.Before != nil || r.After != nil {
+		result += " ("
+		if r.Before != nil {
+			result += fmt.Sprintf("before: %v", r.Before)
 		}
+		if r.Before != nil && r.After != nil {
+			result += ", "
+		}
+		if r.After != nil {
+			result += fmt.Sprintf("after: %v", r.After)
+		}
+		result += ")"
 	}
 
 	return result

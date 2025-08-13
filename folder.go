@@ -54,7 +54,7 @@ func (f *Folder) RemoveOperation(relativePath string, reason op.Reason) op.Opera
 	}
 
 	// TODO: reason
-	return op.NewRmdir(relativePath, operations...)
+	return op.NewRemoveDirOperation(relativePath, operations...)
 }
 
 func (f *Folder) Get(relativePath string) FolderEntry {
@@ -88,11 +88,11 @@ func (f *Folder) CreateOperation(relativePath string, reason op.Reason) op.Opera
 		operations = append(operations, entry.CreateOperation(entryName, reason))
 	}
 
-	return op.NewMkdirOperation(relativePath, operations...)
+	return op.NewCreateDirOperation(relativePath, operations...)
 }
 
 func (f *Folder) ChangeOperation(relativePath string, reason op.Reason, operations ...op.Operation) op.Operation {
-	return op.NewChangeFolderOperation(relativePath, operations...)
+	return op.NewChangeDirOperation(relativePath, operations...)
 }
 
 func (f *Folder) CreateChildOperation(relativePath string, reason op.Reason) op.Operation {
@@ -248,53 +248,29 @@ func (f *Folder) Equal(entry FolderEntry) bool {
 }
 
 func (f *Folder) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
-	// Check if the other entry is also a folder
-	otherFolder, isFolder := entry.(*Folder)
-	if !isFolder {
-		return false, op.Reason{
-			Type:   op.TypeChanged,
-			Before: f.Type(),
-			After:  entry.Type(),
-		}
+	other, ok := entry.(*Folder)
+	if !ok {
+		return false, op.Reason{Type: op.ReasonTypeChanged, Before: FOLDER, After: entry.Type()}
 	}
 
-	// Check if modes are different
-	if f.mode != otherFolder.mode {
-		return false, op.Reason{
-			Type:   op.ModeChanged,
-			Before: f.mode,
-			After:  otherFolder.mode,
-		}
+	if f.mode != other.mode {
+		return false, op.Reason{Type: op.ReasonModeChanged, Before: f.mode, After: other.mode}
 	}
 
-	// Check if they have the same number of entries
-	if len(f._entries) != len(otherFolder._entries) {
-		return false, op.Reason{
-			Type:   op.ContentChanged,
-			Before: len(f._entries),
-			After:  len(otherFolder._entries),
-		}
+	if len(f._entries) != len(other._entries) {
+		return false, op.Reason{Type: op.ReasonContentChanged, Before: len(f._entries), After: len(other._entries)}
 	}
 
-	// Check if all entries are equal
-	for name, fEntry := range f._entries {
-		otherEntry, exists := otherFolder._entries[name]
+	// Check if all entries exist and are equal
+	for name, entry := range f._entries {
+		otherEntry, exists := other._entries[name]
 		if !exists {
-			return false, op.Reason{
-				Type:   op.Missing,
-				Before: name,
-				After:  nil,
-			}
+			return false, op.Reason{Type: op.ReasonMissing, Before: name, After: "missing"}
 		}
 
-		equal, reason := fEntry.EqualWithReason(otherEntry)
+		equal, _ := entry.EqualWithReason(otherEntry)
 		if !equal {
-			// Update the path to include the entry name
-			if reason.Type != "" {
-				reason.Before = name + "/" + fmt.Sprintf("%v", reason.Before)
-				reason.After = name + "/" + fmt.Sprintf("%v", reason.After)
-			}
-			return false, reason
+			return false, op.Reason{Type: op.ReasonContentChanged, Before: name, After: "different content"}
 		}
 	}
 

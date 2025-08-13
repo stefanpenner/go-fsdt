@@ -43,15 +43,15 @@ func (l *Link) Clone() FolderEntry {
 
 func (l *Link) RemoveOperation(relativePath string, reason op.Reason) op.Operation {
 	// TODO: reason
-	return op.NewUnlink(relativePath)
+	return op.NewRemoveLinkOperation(relativePath)
 }
 
 func (l *Link) OperationLinkType() op.LinkType {
 	switch l.Type() {
 	case SYMLINK:
-		return op.SYMBOLIC_LINK
+		return op.SymbolicLink
 	case HARDLINK:
-		return op.HARD_LINK
+		return op.HardLink
 	default:
 		panic("Invalid link type")
 	}
@@ -59,11 +59,20 @@ func (l *Link) OperationLinkType() op.LinkType {
 
 func (l *Link) CreateOperation(relativePath string, reason op.Reason) op.Operation {
 	// TODO: reason
-	return op.NewCreateLink(relativePath, l.Target())
+	var linkType op.LinkType
+	switch l.link_type {
+	case SYMLINK:
+		linkType = op.SymbolicLink
+	case HARDLINK:
+		linkType = op.HardLink
+	default:
+		panic("Invalid link type")
+	}
+	return op.NewCreateLinkOperation(relativePath, l.target, linkType, uint32(l.mode))
 }
 
 func (l *Link) ChangeOperation(relativePath string, reason op.Reason, operations ...op.Operation) op.Operation {
-	panic("no implemented")
+	panic("not implemented")
 }
 
 func (l *Link) Equal(entry FolderEntry) bool {
@@ -77,13 +86,13 @@ func (l *Link) Equal(entry FolderEntry) bool {
 func (l *Link) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
 	other, ok := entry.(*Link)
 	if !ok {
-		return false, op.Reason{Type: op.TypeChanged, Before: l.link_type, After: entry.Type()}
+		return false, op.Reason{Type: op.ReasonTypeChanged, Before: l.link_type, After: entry.Type()}
 	}
 	if l.target != other.target {
-		return false, op.Reason{Type: op.ContentChanged, Before: l.target, After: other.target}
+		return false, op.Reason{Type: op.ReasonContentChanged, Before: l.target, After: other.target}
 	}
 	if l.link_type != other.link_type {
-		return false, op.Reason{Type: op.ContentChanged, Before: l.link_type, After: other.link_type}
+		return false, op.Reason{Type: op.ReasonContentChanged, Before: l.link_type, After: other.link_type}
 	}
 	return true, op.Reason{}
 }

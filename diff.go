@@ -27,7 +27,7 @@ func sortStringsToLower(slice []string) {
 }
 
 func Diff(a, b *Folder, caseSensitive bool) op.Operation {
-	dirValue := op.DirValue{}
+	dirValue := op.DirectoryValue{}
 
 	a_index := 0
 	b_index := 0
@@ -72,7 +72,7 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 				operation := Diff(a_entry, b_entry, caseSensitive)
 
 				operation.RelativePath = b_key
-				if operation.Operand != op.Noop {
+				if !operation.IsNoop() {
 					dirValue.AddOperations(operation)
 				}
 			} else if a_type == FILE && b_type == FILE {
@@ -91,7 +91,7 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 			a_index++
 
 			dirValue.AddOperations(a.RemoveChildOperation(a_key, op.Reason{})) // TODO: missing reason
-		} else if a_key > b_key {
+		} else if b_key < a_key {
 			// b is missing form a
 			b_index++
 			dirValue.AddOperations(b.CreateChildOperation(b_key, op.Reason{})) // TODO: missing reason
@@ -103,24 +103,19 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 	// either both, or one of the arrays is exhausted
 	// if stuff remains in A, remove them
 	for a_index < len(a_keys) {
-		relative_path := a_keys[a_index]
+		dirValue.AddOperations(a.RemoveChildOperation(a_keys[a_index], op.Reason{})) // TODO: missing reason
 		a_index++
-		dirValue.AddOperations(a.RemoveChildOperation(relative_path, op.Reason{}))
 	}
 
-	// if stuff remains in B, add them
+	// if stuff remains in B, create them
 	for b_index < len(b_keys) {
-		relative_path := b_keys[b_index]
+		dirValue.AddOperations(b.CreateChildOperation(b_keys[b_index], op.Reason{})) // TODO: missing reason
 		b_index++
-		dirValue.AddOperations(b.CreateChildOperation(relative_path, op.Reason{}))
 	}
 
 	if len(dirValue.Operations) == 0 {
-		// TODO: also check if the dirs themselves changed (mode, permissions)
-		return op.Nothing
+		return op.NewNoopOperation()
 	}
 
-	result := a.ChangeOperation(".", op.Reason{})
-	result.Value = dirValue
-	return result
+	return op.NewChangeDirOperation(".", dirValue.Operations...)
 }

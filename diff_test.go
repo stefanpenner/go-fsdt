@@ -13,7 +13,7 @@ func TestDiffStuffEmpty(t *testing.T) {
 	a := NewFolder()
 	b := NewFolder()
 
-	assert.Equal(op.Nothing, a.Diff(b))
+	assert.True(a.Diff(b).IsNoop())
 }
 
 func TestDiffWithDifferentCase(t *testing.T) {
@@ -47,21 +47,21 @@ func TestDiffWithDifferentCase(t *testing.T) {
 	b.Symlink("B.md", "b.md")
 
 	assert.Equal(
-		op.NewChangeFolderOperation(".",
+		op.NewChangeDirOperation(".",
 			// case sensitive
-			op.NewCreateLink("B.md", "b.md"),
-			op.NewUnlink("README.md"),
-			op.NewUnlink("a.md"),
-			op.NewUnlink("b.md"),
-			op.NewFileOperation("b.md"),
-			op.NewFileOperation("readme.md"),
+			op.NewCreateLinkOperation("B.md", "b.md", op.SymbolicLink, 0777),
+			op.NewRemoveFileOperation("README.md"),
+			op.NewRemoveFileOperation("a.md"),
+			op.NewRemoveLinkOperation("b.md"),
+			op.NewCreateFileOperation("b.md", []byte("## HI\n"), 0644),
+			op.NewCreateFileOperation("readme.md", []byte("## HI\n"), 0644),
 		), a.Diff(b))
 
-	assert.Equal(op.NewChangeFolderOperation(".",
-		op.NewCreateLink("B.md", "b.md"),
-		op.NewUnlink("a.md"),
-		op.NewUnlink("b.md"),
-		op.NewFileOperation("b.md"),
+	assert.Equal(op.NewChangeDirOperation(".",
+		op.NewCreateLinkOperation("B.md", "b.md", op.SymbolicLink, 0777),
+		op.NewRemoveFileOperation("a.md"),
+		op.NewRemoveLinkOperation("b.md"),
+		op.NewCreateFileOperation("b.md", []byte("## HI\n"), 0644),
 	), a.CaseInsensitiveDiff(b))
 }
 
@@ -78,12 +78,12 @@ func TestDiffStuffAWithEmptyB(t *testing.T) {
 	a.Folder("apple", func(f *Folder) {})
 	a.Symlink("a", "apple")
 
-	assert.Equal(op.NewChangeFolderOperation(".",
-		op.NewUnlink("BUILD.bazel"),
-		op.NewUnlink("README.md"),
-		op.NewUnlink("a"),
-		op.NewRmdir("apple"),
-		op.NewRmdir("lib"),
+	assert.Equal(op.NewChangeDirOperation(".",
+		op.NewRemoveFileOperation("BUILD.bazel"),
+		op.NewRemoveFileOperation("README.md"),
+		op.NewRemoveLinkOperation("a"),
+		op.NewRemoveDirOperation("apple"),
+		op.NewRemoveDirOperation("lib"),
 	), a.Diff(b))
 }
 
@@ -99,12 +99,12 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	b.Folder("apple")
 	b.Symlink("a", "apple")
 
-	assert.Equal(op.NewChangeFolderOperation(".",
-		op.NewFileOperation("BUILD.bazel"),
-		op.NewFileOperation("README.md"),
-		op.NewCreateLink("a", "apple"),
-		op.NewMkdirOperation("apple"),
-		op.NewMkdirOperation("lib"),
+	assert.Equal(op.NewChangeDirOperation(".",
+		op.NewCreateFileOperation("BUILD.bazel", []byte("## HI\n"), 0644),
+		op.NewCreateFileOperation("README.md", []byte("## HI\n"), 0644),
+		op.NewCreateLinkOperation("a", "apple", op.SymbolicLink, 0777),
+		op.NewCreateDirOperation("apple"),
+		op.NewCreateDirOperation("lib"),
 	), a.Diff(b))
 }
 
@@ -138,13 +138,13 @@ func TestDiffStuffWithOverlap(t *testing.T) {
 	a.Folder("lib")
 	// lib is not in b
 
-	assert.Equal(op.NewChangeFolderOperation(".",
-		op.NewUnlink("BUILD.bazel"),
-		op.NewUnlink("d"),
-		op.NewCreateLink("d", "somewhere-else"),
-		op.NewRmdir("lib"),
-		op.NewFileOperation("notes.txt"),
-		op.NewMkdirOperation("orange"),
+	assert.Equal(op.NewChangeDirOperation(".",
+		op.NewRemoveFileOperation("BUILD.bazel"),
+		op.NewRemoveLinkOperation("d"),
+		op.NewCreateLinkOperation("d", "somewhere-else", op.SymbolicLink, 0777),
+		op.NewRemoveDirOperation("lib"),
+		op.NewCreateFileOperation("notes.txt", []byte("## HI\n"), 0644),
+		op.NewCreateDirOperation("orange"),
 	), a.Diff(b))
 }
 
@@ -157,9 +157,9 @@ func TestWithContentDifferences(t *testing.T) {
 	readme := a.FileString("README.md", "## HI\n")
 	b.FileString("README.md", "## Bye\n")
 
-	assert.Equal(op.NewChangeFolderOperation(".",
+	assert.Equal(op.NewChangeDirOperation(".",
 		readme.ChangeOperation("README.md", op.Reason{
-			Type:   op.ContentChanged,
+			Type:   op.ReasonContentChanged,
 			Before: []byte("## HI\n"),
 			After:  []byte("## Bye\n"),
 		}),
@@ -188,17 +188,17 @@ func TestDiffWithDepth(t *testing.T) {
 		})
 	})
 
-	assert.Equal(op.NewChangeFolderOperation(".",
-		op.NewChangeFolderOperation("foo",
-			op.NewUnlink("README.md"),
-			op.NewFileOperation("_README.md"),
-			op.NewMkdirOperation("_bar",
-				op.NewFileOperation("_README.md"),
-				op.NewFileOperation("_b.md"),
+	assert.Equal(op.NewChangeDirOperation(".",
+		op.NewChangeDirOperation("foo",
+			op.NewRemoveFileOperation("README.md"),
+			op.NewCreateFileOperation("_README.md", []byte("## BYE\n"), 0644),
+			op.NewCreateDirOperation("_bar",
+				op.NewCreateFileOperation("_README.md", []byte("## BYE\n"), 0644),
+				op.NewCreateFileOperation("_b.md", []byte("## HI\n"), 0644),
 			),
-			op.NewRmdir("bar",
-				op.NewUnlink("README.md"),
-				op.NewUnlink("a.md"),
+			op.NewRemoveDirOperation("bar",
+				op.NewRemoveFileOperation("README.md"),
+				op.NewRemoveFileOperation("a.md"),
 			),
 		),
 	), a.Diff(b))
@@ -227,31 +227,29 @@ func TestDiffWithDepthAndContent(t *testing.T) {
 	})
 
 	assert.Equal(
-		op.Print(readme.ChangeOperation("apple", op.Reason{})),
-		op.Print(readme.ChangeOperation("apple", op.Reason{})),
+		readme.ChangeOperation("apple", op.Reason{}).String(),
+		readme.ChangeOperation("apple", op.Reason{}).String(),
 	)
 
-	expected := op.Print(
-		op.NewChangeFolderOperation(".",
-			readme.RemoveOperation("README.md", op.Reason{}),
-			op.NewChangeFolderOperation("foo",
-				op.NewFileOperation("README.md"),
-				op.NewChangeFolderOperation("bar",
+	expected := op.NewChangeDirOperation(".",
+		readme.RemoveOperation("README.md", op.Reason{}),
+		op.NewChangeDirOperation("foo",
+			op.NewCreateFileOperation("README.md", []byte("## BYE\n"), 0644),
+			op.NewChangeDirOperation("bar",
 
-					readme.ChangeOperation("README.md", op.Reason{
-						Type:   op.ContentChanged,
-						Before: []byte("## HI\n"),
-						After:  []byte("## BYE\n"),
-					}),
-					op.NewUnlink("a.md"),
-					op.NewFileOperation("b.md"),
-				),
+				readme.ChangeOperation("README.md", op.Reason{
+					Type:   op.ReasonContentChanged,
+					Before: []byte("## HI\n"),
+					After:  []byte("## BYE\n"),
+				}),
+				op.NewRemoveFileOperation("a.md"),
+				op.NewCreateFileOperation("b.md", []byte("## HI\n"), 0644),
 			),
 		),
 	)
 
 	assert.Equal(
-		expected,
-		op.Print(a.Diff(b)),
+		expected.String(),
+		a.Diff(b).String(),
 	)
 }

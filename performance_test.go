@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
-	op "github.com/stefanpenner/go-fsdt/operation"
 )
 
 // Performance thresholds - adjust these based on your performance requirements
@@ -162,7 +160,7 @@ func BenchmarkDiffOperations(b *testing.B) {
 		}
 
 		// Check that diff contains operations (folders are different)
-		if diff.Operand == op.Noop {
+		if diff.IsNoop() {
 			b.Error("Different folders should have diff operations")
 		}
 	}
@@ -211,7 +209,7 @@ func BenchmarkStressTest(b *testing.B) {
 		cloneFolder := clone.(*Folder)
 		diff := Diff(root, cloneFolder, true)
 
-		if diff.Operand == op.Noop {
+		if diff.IsNoop() {
 			b.Error("Diff should contain operations")
 		}
 
@@ -320,7 +318,7 @@ func TestPerformanceThresholds(t *testing.T) {
 		}
 
 		// Different folders should have diff operations
-		if diff.Operand == op.Noop {
+		if diff.IsNoop() {
 			t.Error("Different folders should have diff operations")
 		}
 	})
@@ -342,7 +340,7 @@ func TestMemoryLeaks(t *testing.T) {
 		diff := Diff(root, cloneFolder, true)
 
 		// Identical folders should have no diff operations
-		if diff.Operand != op.Noop {
+		if !diff.IsNoop() {
 			t.Error("Identical folders should have no diff operations")
 		}
 

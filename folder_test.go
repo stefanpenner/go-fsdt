@@ -158,10 +158,7 @@ func TestFolderToDirAndBack(t *testing.T) {
 		assert.Equal([]string{"README.md", "lib"}, newFolder.Entries())
 		assert.Equal([]string{"README.md", "lib"}, other.Entries())
 
-		assert.Equal(newFolder.Get("README.md").ContentString(), "## HI\n")
-		assert.Equal(other.Get("README.md").ContentString(), "## HI\n")
-
-		assert.Equal(op.Nothing, newFolder.Diff(other))
+		assert.Equal(op.NewNoopOperation(), newFolder.Diff(other))
 	})
 }
 
@@ -280,10 +277,10 @@ func TestCreateChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(op.NewFileOperation("README.md"), a.CreateChildOperation("README.md", op.Reason{}))
-	assert.Equal(op.NewMkdirOperation("a",
-		op.NewMkdirOperation("b",
-			op.NewFileOperation("c"),
+	assert.Equal(op.NewCreateFileOperation("README.md", []byte("## HI\n"), 0644), a.CreateChildOperation("README.md", op.Reason{}))
+	assert.Equal(op.NewCreateDirOperation("a",
+		op.NewCreateDirOperation("b",
+			op.NewCreateFileOperation("c", []byte("## HI\n"), 0644),
 		),
 	), a.CreateChildOperation("a", op.Reason{}))
 }
@@ -298,10 +295,10 @@ func TestRemoveChildOperation(t *testing.T) {
 		})
 	})
 
-	assert.Equal(op.NewUnlink("README.md"), a.RemoveChildOperation("README.md", op.Reason{}))
-	assert.Equal(op.NewRmdir("a",
-		op.NewRmdir("b",
-			op.NewUnlink("c"),
+	assert.Equal(op.NewRemoveFileOperation("README.md"), a.RemoveChildOperation("README.md", op.Reason{}))
+	assert.Equal(op.NewRemoveDirOperation("a",
+		op.NewRemoveDirOperation("b",
+			op.NewRemoveFileOperation("c"),
 		),
 	), a.RemoveChildOperation("a", op.Reason{}))
 }
@@ -365,34 +362,31 @@ func TestReadmeExample(t *testing.T) {
 	err = newFolder.ReadFrom(folderDir)
 	require.NoError(err)
 
-	// comparision to self should yield nothing
-	assert.Equal(op.Nothing, folder.Diff(folder))
+	assert.True(folder.Diff(folder).IsNoop())
 
-	// let's compare the two, but they are the same so it's boring
-	assert.Equal(op.Nothing, newFolder.Diff(folder))
+	assert.True(newFolder.Diff(folder).IsNoop())
 
 	// // we can also create a new folder via clone
 	clone := folder.Clone().(*Folder)
 
-	// let's compare the two, but they are the same so it's boring
-	assert.Equal(op.Nothing, folder.Diff(clone))
-	assert.Equal(op.Nothing, newFolder.Diff(clone))
+	assert.True(folder.Diff(clone).IsNoop())
+	assert.True(newFolder.Diff(clone).IsNoop())
 
 	// let's remove a folder that contains a file
 	err = folder.Remove("lib")
 
 	require.NoError(err)
 	// now there should be a diff
-	assert.Equal(op.NewChangeFolderOperation(".",
-		op.NewMkdirOperation("lib",
-			op.NewFileOperation("Empty.txt"),
+	assert.Equal(op.NewChangeDirOperation(".",
+		op.NewCreateDirOperation("lib",
+			op.NewCreateFileOperation("Empty.txt", nil, 0644),
 		),
 	), folder.Diff(clone))
 
 	// now there should be a diff (Reverse)
-	assert.Equal(op.NewChangeFolderOperation(".",
-		op.NewRmdir("lib",
-			op.NewUnlink("Empty.txt"),
+	assert.Equal(op.NewChangeDirOperation(".",
+		op.NewRemoveDirOperation("lib",
+			op.NewRemoveFileOperation("Empty.txt"),
 		),
 	), clone.Diff(folder))
 }

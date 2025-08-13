@@ -55,22 +55,19 @@ func (f *File) Clone() FolderEntry {
 
 func (f *File) RemoveOperation(relativePath string, reason op.Reason) op.Operation {
 	// TODO: reason
-	return op.NewUnlink(relativePath)
+	return op.NewRemoveFileOperation(relativePath)
 }
 
 func (f *File) CreateOperation(relativePath string, reason op.Reason) op.Operation {
 	// TODO: reason
-	return op.NewFileOperation(relativePath)
+	return op.NewCreateFileOperation(relativePath, f.content, uint32(f.mode))
 }
 
 func (f *File) ChangeOperation(relativePath string, reason op.Reason, operations ...op.Operation) op.Operation {
-	return op.Operation{
-		Operand:      op.ChangeFile,
-		RelativePath: relativePath,
-		Value: op.FileChangedValue{
-			Reason: reason,
-		},
-	}
+	return op.NewChangeFileOperation(relativePath,
+		op.FileValue{Content: f.content, Mode: uint32(f.mode), Size: int64(len(f.content))},
+		op.FileValue{Content: f.content, Mode: uint32(f.mode), Size: int64(len(f.content))},
+		op.ReasonContentChanged)
 }
 
 func (f *File) Type() FolderEntryType {
@@ -105,33 +102,17 @@ func (f *File) Equal(entry FolderEntry) bool {
 }
 
 func (f *File) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
-	file, isFile := entry.(*File)
-
-	if isFile {
-		if f.mode != file.mode {
-			return false, op.Reason{
-				Type:   op.ModeChanged,
-				Before: f.Mode(),
-				After:  file.Mode(),
-			}
-		}
-
-		if bytes.Equal(f.content, file.content) {
-			return true, op.Reason{}
-		} else {
-			// TODO: maybe should show offset and first char difference
-			return false, op.Reason{
-				Type:   op.ContentChanged,
-				Before: f.content,
-				After:  file.content,
-			}
-		}
+	other, ok := entry.(*File)
+	if !ok {
+		return false, op.Reason{Type: op.ReasonTypeChanged, Before: FILE, After: entry.Type()}
 	}
-	return false, op.Reason{
-		Type:   op.TypeChanged,
-		Before: f.Type(),
-		After:  entry.Type(),
+	if f.mode != other.mode {
+		return false, op.Reason{Type: op.ReasonModeChanged, Before: f.mode, After: other.mode}
 	}
+	if !bytes.Equal(f.content, other.content) {
+		return false, op.Reason{Type: op.ReasonContentChanged, Before: f.content, After: other.content}
+	}
+	return true, op.Reason{}
 }
 
 func (f *File) HasContent() bool {

@@ -136,18 +136,18 @@ func FuzzFileOperations(f *testing.F) {
 		// Test file operations
 		if name != "" {
 			operation := file.CreateOperation(name, op.Reason{})
-			if operation.Operand == "" {
-				t.Fatal("CreateOperation returned empty operand")
+			if operation.Type == "" {
+				t.Fatal("CreateOperation returned empty type")
 			}
 
 			operation = file.RemoveOperation(name, op.Reason{})
-			if operation.Operand == "" {
-				t.Fatal("RemoveOperation returned empty operand")
+			if operation.Type == "" {
+				t.Fatal("RemoveOperation returned empty type")
 			}
 
 			operation = file.ChangeOperation(name, op.Reason{})
-			if operation.Operand == "" {
-				t.Fatal("ChangeOperation returned empty operand")
+			if operation.Type == "" {
+				t.Fatal("ChangeOperation returned empty type")
 			}
 		}
 
@@ -223,13 +223,13 @@ func FuzzLinkOperations(f *testing.F) {
 		// Test link operations
 		if linkName != "" {
 			operation := link.CreateOperation(linkName, op.Reason{})
-			if operation.Operand == "" {
-				t.Fatal("CreateOperation returned empty operand")
+			if operation.Type == "" {
+				t.Fatal("CreateOperation returned empty type")
 			}
 
 			operation = link.RemoveOperation(linkName, op.Reason{})
-			if operation.Operand == "" {
-				t.Fatal("RemoveOperation returned empty operand")
+			if operation.Type == "" {
+				t.Fatal("RemoveOperation returned empty type")
 			}
 		}
 
@@ -403,13 +403,27 @@ func FuzzDiffOperations(f *testing.F) {
 
 		// Test diff operations
 		diff := folderA.Diff(folderB)
-		if diff.Operand == "" {
+		if diff.Type == "" {
 			t.Fatal("Diff should return valid operation")
 		}
 
 		caseInsensitiveDiff := folderA.CaseInsensitiveDiff(folderB)
-		if caseInsensitiveDiff.Operand == "" {
+		if caseInsensitiveDiff.Type == "" {
 			t.Fatal("CaseInsensitiveDiff should return valid operation")
+		}
+
+		// Verify the diff contains operations
+		if diff.IsNoop() {
+			t.Log("Diff returned no-op (folders are identical)")
+		} else {
+			t.Log("Diff returned operations:", diff.Type)
+		}
+
+		// Verify the case-insensitive diff contains operations
+		if caseInsensitiveDiff.IsNoop() {
+			t.Log("CaseInsensitiveDiff returned no-op")
+		} else {
+			t.Log("CaseInsensitiveDiff returned operations:", caseInsensitiveDiff.Type)
 		}
 	})
 }
