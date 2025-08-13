@@ -65,10 +65,7 @@ jobs:
         echo ""
         
         # Run the specific fuzz test for 2 minutes
-        timeout 130s go test -fuzz=${{ matrix.fuzz-test }} -fuzztime=2m -parallel=8 -v || {
-          echo "❌ Fuzz test ${{ matrix.fuzz-test }} found issues or timed out"
-          exit 1
-        }
+        go test -fuzz=${{ matrix.fuzz-test }} -fuzztime=2m -parallel=8 -v
         
         echo "✅ Fuzz test ${{ matrix.fuzz-test }} completed successfully"
 
@@ -111,10 +108,7 @@ jobs:
           # Check if corpus exists
           if [ -d "testdata/fuzz/$test" ]; then
             echo "📁 Found existing corpus, running regression test..."
-            timeout 320s go test -fuzz=$test -fuzztime=5m -parallel=8 -v || {
-              echo "❌ Regression fuzz test $test found issues"
-              exit 1
-            }
+            go test -fuzz=$test -fuzztime=5m -parallel=8 -v
           else
             echo "⚠️  No corpus found for $test, skipping regression test"
           fi
