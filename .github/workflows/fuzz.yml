@@ -1,0 +1,255 @@
+# Dedicated fuzz testing workflow for go-fsdt
+# This workflow runs comprehensive fuzz tests with longer durations and corpus management
+
+name: Fuzz Testing
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      fuzz_duration:
+        description: 'Fuzz test duration per test (minutes)'
+        required: true
+        default: '10'
+        type: string
+      parallel_workers:
+        description: 'Number of parallel workers'
+        required: true
+        default: '16'
+        type: string
+      specific_test:
+        description: 'Specific fuzz test to run (leave empty for all)'
+        required: false
+        default: ''
+        type: string
+  
+  # Run on schedule for continuous fuzz testing
+  schedule:
+    # Run intensive fuzz tests every Sunday at 3 AM UTC
+    - cron: '0 3 * * 0'
+  
+  # Run on push to main for quick feedback
+  push:
+    branches: [ "main" ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/fuzz.yml'
+
+jobs:
+  fuzz-intensive:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        fuzz-test:
+          - FuzzFolderCreation
+          - FuzzFileOperations
+          - FuzzLinkOperations
+          - FuzzFolderOperations
+          - FuzzDiffOperations
+          - FuzzEdgeCases
+          - FuzzSerialization
+          - FuzzMemoryStress
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23.2'
+
+    - name: Install Go dependencies
+      run: go mod download
+
+    - name: Create testdata directory
+      run: |
+        mkdir -p testdata/fuzz/${{ matrix.fuzz-test }}
+        echo "Created testdata directory for ${{ matrix.fuzz-test }}"
+
+    - name: Run Intensive Fuzz Test - ${{ matrix.fuzz-test }}
+      run: |
+        echo "🧪 Running intensive fuzz test: ${{ matrix.fuzz-test }}"
+        echo "⏱️  Duration: ${{ github.event.inputs.fuzz_duration || '10' }} minutes"
+        echo "👥 Workers: ${{ github.event.inputs.parallel_workers || '16' }}"
+        echo "📁 Corpus directory: testdata/fuzz/${{ matrix.fuzz-test }}"
+        echo ""
+        
+        # Calculate timeout (duration + 2 minutes buffer)
+        DURATION_MINUTES=${{ github.event.inputs.fuzz_duration || '10' }}
+        TIMEOUT_SECONDS=$((DURATION_MINUTES * 60 + 120))
+        
+        # Run the specific fuzz test with specified duration
+        timeout ${TIMEOUT_SECONDS}s go test -fuzz=${{ matrix.fuzz-test }} \
+          -fuzztime=${DURATION_MINUTES}m \
+          -parallel=${{ github.event.inputs.parallel_workers || '16' }} \
+          -v || {
+          echo "❌ Intensive fuzz test ${{ matrix.fuzz-test }} found issues or timed out"
+          exit 1
+        }
+        
+        echo "✅ Intensive fuzz test ${{ matrix.fuzz-test }} completed successfully"
+
+    - name: Upload Fuzz Corpus
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: fuzz-corpus-${{ matrix.fuzz-test }}-intensive
+        path: |
+          testdata/fuzz/${{ matrix.fuzz-test }}/
+        retention-days: 90
+
+    - name: Upload Fuzz Test Logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: fuzz-logs-${{ matrix.fuzz-test }}
+        path: |
+          testdata/fuzz/${{ matrix.fuzz-test }}/
+        retention-days: 30
+
+  fuzz-corpus-analysis:
+    runs-on: ubuntu-latest
+    needs: [fuzz-intensive]
+    if: always()
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23.2'
+
+    - name: Download All Fuzz Corpora
+      uses: actions/download-artifact@v4
+      with:
+        pattern: fuzz-corpus-*-intensive
+
+    - name: Analyze Fuzz Corpus
+      run: |
+        echo "📊 Analyzing fuzz corpus data..."
+        echo "=================================="
+        
+        TOTAL_TESTS=0
+        TOTAL_CORPUS_FILES=0
+        
+        for test in FuzzFolderCreation FuzzFileOperations FuzzLinkOperations FuzzFolderOperations FuzzDiffOperations FuzzEdgeCases FuzzSerialization FuzzMemoryStress; do
+          if [ -d "testdata/fuzz/$test" ]; then
+            CORPUS_COUNT=$(find "testdata/fuzz/$test" -type f | wc -l)
+            echo "🧪 $test: $CORPUS_COUNT corpus files"
+            TOTAL_TESTS=$((TOTAL_TESTS + 1))
+            TOTAL_CORPUS_FILES=$((TOTAL_CORPUS_FILES + CORPUS_COUNT))
+          else
+            echo "🧪 $test: No corpus found"
+          fi
+        done
+        
+        echo ""
+        echo "📈 Summary:"
+        echo "   - Total tests: $TOTAL_TESTS"
+        echo "   - Total corpus files: $TOTAL_CORPUS_FILES"
+        echo "   - Average corpus files per test: $((TOTAL_CORPUS_FILES / TOTAL_TESTS))"
+
+    - name: Upload Corpus Analysis
+      uses: actions/upload-artifact@v4
+      with:
+        name: corpus-analysis
+        path: |
+          testdata/
+        retention-days: 90
+
+  fuzz-regression-long:
+    runs-on: ubuntu-latest
+    needs: [fuzz-intensive]
+    if: github.event_name == 'schedule'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23.2'
+
+    - name: Download Fuzz Corpora
+      uses: actions/download-artifact@v4
+      with:
+        pattern: fuzz-corpus-*-intensive
+
+    - name: Run Long Regression Tests
+      run: |
+        echo "🔄 Running long regression fuzz tests..."
+        echo "⏱️  Duration: 15 minutes per test"
+        echo "👥 Workers: 8 (reduced for stability)"
+        echo ""
+        
+        for test in FuzzFolderCreation FuzzFileOperations FuzzLinkOperations FuzzFolderOperations FuzzDiffOperations FuzzEdgeCases FuzzSerialization FuzzMemoryStress; do
+          echo "🧪 Running long regression test: $test"
+          
+          if [ -d "testdata/fuzz/$test" ]; then
+            echo "📁 Found corpus with $(find testdata/fuzz/$test -type f | wc -l) files"
+            
+            # Run with longer timeout for regression testing
+            timeout 1000s go test -fuzz=$test -fuzztime=15m -parallel=8 -v || {
+              echo "❌ Long regression fuzz test $test found issues"
+              exit 1
+            }
+          else
+            echo "⚠️  No corpus found for $test, skipping"
+          fi
+          
+          echo "✅ Long regression test $test completed"
+          echo ""
+        done
+
+  fuzz-performance:
+    runs-on: ubuntu-latest
+    needs: [fuzz-intensive]
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23.2'
+
+    - name: Download Fuzz Corpora
+      uses: actions/download-artifact@v4
+      with:
+        pattern: fuzz-corpus-*-intensive
+
+    - name: Run Performance Fuzz Tests
+      run: |
+        echo "⚡ Running performance-focused fuzz tests..."
+        echo "⏱️  Duration: 5 minutes per test"
+        echo "👥 Workers: 32 (high parallelism)"
+        echo ""
+        
+        for test in FuzzFolderCreation FuzzFileOperations FuzzLinkOperations FuzzFolderOperations FuzzDiffOperations FuzzEdgeCases FuzzSerialization FuzzMemoryStress; do
+          echo "🧪 Running performance test: $test"
+          
+          if [ -d "testdata/fuzz/$test" ]; then
+            echo "📁 Found corpus, running performance test..."
+            
+            # Run with high parallelism for performance testing
+            timeout 400s go test -fuzz=$test -fuzztime=5m -parallel=32 -v || {
+              echo "❌ Performance fuzz test $test found issues"
+              exit 1
+            }
+          else
+            echo "⚠️  No corpus found for $test, skipping"
+          fi
+          
+          echo "✅ Performance test $test completed"
+          echo ""
+        done
+
+    - name: Upload Performance Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-results
+        path: |
+          testdata/
+        retention-days: 30

@@ -243,12 +243,62 @@ func (f *Folder) Type() FolderEntryType {
 }
 
 func (f *Folder) Equal(entry FolderEntry) bool {
-	return false
+	equal, _ := f.EqualWithReason(entry)
+	return equal
 }
 
 func (f *Folder) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
-	// TODO: deal with MODE
-	return false, op.Reason{}
+	// Check if the other entry is also a folder
+	otherFolder, isFolder := entry.(*Folder)
+	if !isFolder {
+		return false, op.Reason{
+			Type:   op.TypeChanged,
+			Before: f.Type(),
+			After:  entry.Type(),
+		}
+	}
+
+	// Check if modes are different
+	if f.mode != otherFolder.mode {
+		return false, op.Reason{
+			Type:   op.ModeChanged,
+			Before: f.mode,
+			After:  otherFolder.mode,
+		}
+	}
+
+	// Check if they have the same number of entries
+	if len(f._entries) != len(otherFolder._entries) {
+		return false, op.Reason{
+			Type:   op.ContentChanged,
+			Before: len(f._entries),
+			After:  len(otherFolder._entries),
+		}
+	}
+
+	// Check if all entries are equal
+	for name, fEntry := range f._entries {
+		otherEntry, exists := otherFolder._entries[name]
+		if !exists {
+			return false, op.Reason{
+				Type:   op.Missing,
+				Before: name,
+				After:  nil,
+			}
+		}
+
+		equal, reason := fEntry.EqualWithReason(otherEntry)
+		if !equal {
+			// Update the path to include the entry name
+			if reason.Type != "" {
+				reason.Before = name + "/" + fmt.Sprintf("%v", reason.Before)
+				reason.After = name + "/" + fmt.Sprintf("%v", reason.After)
+			}
+			return false, reason
+		}
+	}
+
+	return true, op.Reason{}
 }
 
 func (f *Folder) HasContent() bool {
