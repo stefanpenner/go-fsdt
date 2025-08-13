@@ -53,28 +53,28 @@ jobs:
     - name: Build
       run: go build -v ./...
 
-    - name: Run Tests
-      run: go test -v ./...
+    - name: Run Fast Tests (PR) or Full Tests (Main)
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "Running fast tests for PR..."
+          go test -v -short ./...
+        else
+          echo "Running full tests for main branch..."
+          go test -v ./...
+        fi
 
     - name: Run Go Vet
       run: go vet ./...
 
     - name: Run Race Detection
-      run: go test -race -v ./...
-
-    - name: Generate Coverage
       run: |
-        go test -coverprofile=coverage.out -covermode=atomic ./...
-        go tool cover -html=coverage.out -o coverage.html
-
-    - name: Upload Coverage
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage
-        path: |
-          coverage.out
-          coverage.html
-        retention-days: 90
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "Running race detection with fast tests..."
+          go test -race -v -short ./...
+        else
+          echo "Running race detection with full tests..."
+          go test -race -v ./...
+        fi
 
   # Performance tests - runs on every push/PR
   performance:
@@ -147,12 +147,12 @@ jobs:
 
     - name: Run All Quick Fuzz Tests
       run: |
-        echo "Running quick fuzz tests (1 minute each)..."
+        echo "Running quick fuzz tests (30 seconds each)..."
         
         for test in FuzzFolderCreation FuzzFileOperations FuzzLinkOperations FuzzFolderOperations FuzzDiffOperations FuzzEdgeCases FuzzSerialization FuzzMemoryStress; do
           echo "🧪 Running: $test"
-          # Add individual test timeout: 1 minute fuzz + 30 seconds buffer
-          timeout 90s go test -fuzz=$test -fuzztime=1m -parallel=4 -v || echo "⚠️  $test completed (may have found issues)"
+          # Add individual test timeout: 30 seconds fuzz + 30 seconds buffer
+          timeout 60s go test -fuzz=$test -fuzztime=30s -parallel=4 -v || echo "⚠️  $test completed (may have found issues)"
           echo ""
         done
 

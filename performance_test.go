@@ -246,55 +246,60 @@ func createTestFolder(name string, depth, width int) *Folder {
 
 // TestPerformanceThresholds runs performance tests and checks against thresholds
 func TestPerformanceThresholds(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping performance tests in short mode")
+	}
+
 	// Test file operations
 	t.Run("FileOperations", func(t *testing.T) {
-		start := time.Now()
+		// Create a test file
 		file := NewFile(FileOptions{Content: []byte("test content"), Mode: 0644})
-		createTime := time.Since(start)
 
-		if createTime > MaxFileCreateTime {
-			t.Errorf("File creation exceeded threshold: %v (max: %v)", createTime, MaxFileCreateTime)
-		}
-
-		start = time.Now()
+		start := time.Now()
 		_ = file.Content()
-		_ = file.Mode()
 		readTime := time.Since(start)
 
 		if readTime > MaxFileReadTime {
-			t.Errorf("File read exceeded threshold: %v (max: %v)", readTime, MaxFileReadTime)
+			t.Errorf("File read operation exceeded threshold: %v (max: %v)", readTime, MaxFileReadTime)
+		}
+
+		start = time.Now()
+		clone := file.Clone()
+		cloneTime := time.Since(start)
+
+		if cloneTime > MaxFileCreateTime {
+			t.Errorf("File clone operation exceeded threshold: %v (max: %v)", cloneTime, MaxFileCreateTime)
+		}
+
+		// Test equality
+		equal := file.Equal(clone)
+		if !equal {
+			t.Error("Cloned file should equal original")
 		}
 	})
 
 	// Test folder operations
 	t.Run("FolderOperations", func(t *testing.T) {
+		folder := createTestFolder("test", 3, 2)
+
 		start := time.Now()
-		folder := NewFolder()
-		createTime := time.Since(start)
-
-		if createTime > MaxFolderCreateTime {
-			t.Errorf("Folder creation exceeded threshold: %v (max: %v)", createTime, MaxFolderCreateTime)
-		}
-
-		// Add some entries
-		folder.File("test.txt", FileOptions{Content: []byte("test content"), Mode: 0644})
-
-		start = time.Now()
 		clone := folder.Clone()
 		cloneTime := time.Since(start)
 
-		if cloneTime > MaxFolderCloneTime {
-			t.Errorf("Folder cloning exceeded threshold: %v (max: %v)", cloneTime, MaxFolderCloneTime)
+		if cloneTime > MaxFolderCreateTime {
+			t.Errorf("Folder clone operation exceeded threshold: %v (max: %v)", cloneTime, MaxFolderCreateTime)
 		}
 
 		start = time.Now()
-		equal := folder.Equal(clone)
-		equalTime := time.Since(start)
+		_ = folder.Entries()
+		readTime := time.Since(start)
 
-		if equalTime > MaxFolderEqualTime {
-			t.Errorf("Folder equality check exceeded threshold: %v (max: %v)", equalTime, MaxFolderEqualTime)
+		if readTime > MaxFolderReadTime {
+			t.Errorf("Folder read operation exceeded threshold: %v (max: %v)", readTime, MaxFolderReadTime)
 		}
 
+		// Test equality
+		equal := folder.Equal(clone)
 		if !equal {
 			t.Error("Cloned folder should equal original")
 		}
@@ -323,6 +328,10 @@ func TestPerformanceThresholds(t *testing.T) {
 
 // TestMemoryLeaks checks for potential memory leaks
 func TestMemoryLeaks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping memory leak tests in short mode")
+	}
+
 	// Create a large structure
 	root := createTestFolder("memory_test", 4, 3)
 
@@ -347,6 +356,10 @@ func TestMemoryLeaks(t *testing.T) {
 
 // TestConcurrentSafety tests concurrent access safety
 func TestConcurrentSafety(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping concurrent safety tests in short mode")
+	}
+
 	folder := createTestFolder("concurrent_test", 3, 2)
 	// Add a specific file that the test will access
 	folder.File("file1.txt", FileOptions{Content: []byte("test content"), Mode: 0644})

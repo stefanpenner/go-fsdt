@@ -14,6 +14,10 @@ import (
 
 // FuzzFolderCreation tests folder creation with various inputs
 func FuzzFolderCreation(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
+
 	// Seed with some basic test cases
 	testCases := []string{
 		"",
@@ -84,6 +88,9 @@ func FuzzFolderCreation(f *testing.F) {
 
 // FuzzFileOperations tests file operations with various inputs
 func FuzzFileOperations(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
 	// Seed with various content types
 	testCases := []struct {
 		name    string
@@ -175,6 +182,9 @@ func FuzzFileOperations(f *testing.F) {
 
 // FuzzLinkOperations tests link operations with various inputs
 func FuzzLinkOperations(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
 	// Seed with various target types
 	testCases := []struct {
 		linkName string
@@ -259,6 +269,9 @@ func FuzzLinkOperations(f *testing.F) {
 
 // FuzzFolderOperations tests complex folder operations
 func FuzzFolderOperations(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
 	// Seed with various folder structures
 	testCases := []struct {
 		depth    int
@@ -340,6 +353,9 @@ func FuzzFolderOperations(f *testing.F) {
 
 // FuzzDiffOperations tests diff operations with various inputs
 func FuzzDiffOperations(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
 	// Seed with various diff scenarios
 	testCases := []struct {
 		depth    int
@@ -400,6 +416,9 @@ func FuzzDiffOperations(f *testing.F) {
 
 // FuzzEdgeCases tests various edge cases and error conditions
 func FuzzEdgeCases(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
 	// Seed with various edge cases
 	testCases := []struct {
 		operation string
@@ -631,6 +650,9 @@ func testGenericInputs(t *testing.T, input string) {
 
 // FuzzSerialization tests serialization and deserialization edge cases
 func FuzzSerialization(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
 	// Seed with various serialization scenarios
 	testCases := []struct {
 		operation string
@@ -676,6 +698,9 @@ func FuzzSerialization(f *testing.F) {
 
 // FuzzMemoryStress tests memory allocation and stress scenarios
 func FuzzMemoryStress(f *testing.F) {
+	if testing.Short() {
+		f.Skip("Skipping fuzz tests in short mode")
+	}
 	// Seed with various stress scenarios
 	testCases := []struct {
 		iterations int
