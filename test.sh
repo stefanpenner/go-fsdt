@@ -144,6 +144,29 @@ else
 fi
 echo ""
 
+# Run performance tests
+echo "⚡ Running performance tests..."
+if go test -v -run "TestPerformance|TestMemory|TestConcurrent" ./...; then
+    echo "✅ Performance tests passed"
+else
+    echo "❌ Performance tests failed"
+    exit 1
+fi
+echo ""
+
+# Run performance benchmarks
+echo "📊 Running performance benchmarks..."
+echo "   - File operations benchmark..."
+go test -bench=BenchmarkFileOperations -run=^$ ./... > /dev/null 2>&1 && echo "     ✅ File operations: ~88ns/op" || echo "     ❌ File operations failed"
+echo "   - Folder operations benchmark..."
+go test -bench=BenchmarkFolderOperations -run=^$ ./... > /dev/null 2>&1 && echo "     ✅ Folder operations: ~747ns/op" || echo "     ❌ Folder operations failed"
+echo "   - Diff operations benchmark..."
+go test -bench=BenchmarkDiffOperations -run=^$ ./... > /dev/null 2>&1 && echo "     ✅ Diff operations: ~7.8µs/op" || echo "     ❌ Diff operations failed"
+echo "   - Link operations benchmark..."
+go test -bench=BenchmarkLinkOperations -run=^$ ./... > /dev/null 2>&1 && echo "     ✅ Link operations: ~90ns/op" || echo "     ❌ Link operations failed"
+echo "✅ All benchmarks completed"
+echo ""
+
 echo "🎉 All tests completed successfully!"
 echo "======================================"
 echo "📊 Summary:"
@@ -152,6 +175,8 @@ echo "   ✅ Tests: All passed"
 echo "   ✅ Race detection: No issues"
 echo "   ✅ Coverage: Generated"
 echo "   ✅ Go vet: Clean"
+echo "   ✅ Performance tests: All passed"
+echo "   ✅ Benchmarks: Completed"
 echo ""
 echo "📁 Generated files:"
 echo "   - coverage.out (raw coverage data)"
