@@ -9,11 +9,8 @@ import (
 
 func Test_Virtual_StructureOnly_Ignores_Content(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
-
-	SetFileString(left, "a.txt", "hello")
-	SetFileString(right, "a.txt", "world")
+	left := FS(map[string]string{"a.txt": "hello"})
+	right := FS(map[string]string{"a.txt": "world"})
 
 	d := DiffWithConfig(left, right, DefaultFast())
 	require.Equal(op.Nothing, d)
@@ -21,11 +18,8 @@ func Test_Virtual_StructureOnly_Ignores_Content(t *testing.T) {
 
 func Test_Virtual_Bytes_Detects_Content(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
-
-	SetFileString(left, "a.txt", "hello")
-	SetFileString(right, "a.txt", "world")
+	left := FS(map[string]string{"a.txt": "hello"})
+	right := FS(map[string]string{"a.txt": "world"})
 
 	d := DiffWithConfig(left, right, DefaultAccurate())
 	require.NotEqual(op.Nothing, d)
@@ -33,33 +27,25 @@ func Test_Virtual_Bytes_Detects_Content(t *testing.T) {
 
 func Test_Virtual_ChecksumPrefer_With_Computed_Sums(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
+	left := FS(map[string]string{"a.txt": "hello"})
+	right := FS(map[string]string{"a.txt": "hello"})
 
-	SetFileString(left, "a.txt", "hello")
-	SetFileString(right, "a.txt", "hello")
-
-	// Precompute checksums in-memory (no store)
 	_, _, _ = left.Get("a.txt").(*File).EnsureChecksum(ChecksumOptions{Algorithm: "sha256", ComputeIfMissing: true})
 	_, _, _ = right.Get("a.txt").(*File).EnsureChecksum(ChecksumOptions{Algorithm: "sha256", ComputeIfMissing: true})
 
-	cfg := Checksums("sha256", nil) // prefer checksum, no store needed
+	cfg := Checksums("sha256", nil)
 	d := DiffWithConfig(left, right, cfg)
 	require.Equal(op.Nothing, d)
 }
 
 func Test_Virtual_ChecksumRequire_Missing_Returns_Incompatible(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
+	left := FS(map[string]string{"a.txt": "hello"})
+	right := FS(map[string]string{"a.txt": "hello"})
 
-	SetFileString(left, "a.txt", "hello")
-	SetFileString(right, "a.txt", "hello")
-
-	cfg := ChecksumsStrict("sha256", nil) // require checksum, but none present
+	cfg := ChecksumsStrict("sha256", nil)
 	d := DiffWithConfig(left, right, cfg)
 
-	// Expect at least one nested operation with Reason Because
 	found := false
 	if dv, ok := d.Value.(op.DirValue); ok {
 		for _, child := range dv.Operations {
@@ -68,21 +54,16 @@ func Test_Virtual_ChecksumRequire_Missing_Returns_Incompatible(t *testing.T) {
 			}
 		}
 	}
-	require.True(found, "expected at least one FileChangedValue with Reason Because when checksum is required but missing")
+	require.True(found, "expected Because when checksum required but missing")
 }
 
 func Test_Virtual_ExcludeGlobs_Skips_Entries(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
-
-	SetFileString(left, "keep.txt", "1")
-	SetFileString(right, "keep.txt", "2")
-	EnsureFolderPath(left, "tmp").FileString("x.log", "a")
-	EnsureFolderPath(right, "tmp").FileString("x.log", "b")
+	left := FS(map[string]string{"keep.txt": "1", "tmp/x.log": "a"})
+	right := FS(map[string]string{"keep.txt": "2", "tmp/x.log": "b"})
 
 	cfg := DefaultAccurate()
 	cfg.ExcludeGlobs = []string{"tmp/**"}
 	d := DiffWithConfig(left, right, cfg)
-	require.NotEqual(op.Nothing, d) // keep.txt differs, tmp/** ignored
+	require.NotEqual(op.Nothing, d)
 }
