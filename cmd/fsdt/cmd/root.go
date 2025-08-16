@@ -33,13 +33,54 @@ var rootCmd = &cobra.Command{
 	Use:   "fsdt [flags] <left> <right>",
 	Short: "Fast, configurable filesystem diffing",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) error {
 		left := filepath.Clean(args[0])
 		right := filepath.Clean(args[1])
+
+		// Normalize aliases
 		if rootOpts.chkCache != "" {
 			rootOpts.sidecar = rootOpts.chkCache
 		}
-		if rootOpts.root == "" { rootOpts.root = left }
+		if rootOpts.root == "" {
+			rootOpts.root = left
+		}
+
+		// Validate flags
+		switch rootOpts.mode {
+		case "fast", "accurate", "checksum", "checksum-ensure", "checksum-require":
+		default:
+			return cerrs.Newf("unknown mode: %s", rootOpts.mode)
+		}
+		switch rootOpts.format {
+		case "pretty", "tree", "json", "paths":
+		default:
+			return cerrs.Newf("unknown format: %s", rootOpts.format)
+		}
+		switch rootOpts.progress {
+		case "on", "off", "auto":
+		default:
+			return cerrs.Newf("unknown progress value: %s (expected on|off|auto)", rootOpts.progress)
+		}
+		if rootOpts.algo == "" {
+			return cerrs.Newf("algo must not be empty")
+		}
+
+		// Validate paths exist and are directories
+		if fi, err := os.Stat(left); err != nil {
+			return cerrs.Wrapf(err, "left path error: %s", left)
+		} else if !fi.IsDir() {
+			return cerrs.Newf("left path is not a directory: %s", left)
+		}
+		if fi, err := os.Stat(right); err != nil {
+			return cerrs.Wrapf(err, "right path error: %s", right)
+		} else if !fi.IsDir() {
+			return cerrs.Newf("right path is not a directory: %s", right)
+		}
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		left := filepath.Clean(args[0])
+		right := filepath.Clean(args[1])
 
 		ui := newProgressUI(shouldEnableProgress(rootOpts.progress))
 		ui.Start("Starting…")
