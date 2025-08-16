@@ -2,6 +2,7 @@ package fsdt
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"errors"
 	"io"
@@ -11,8 +12,20 @@ import (
 	"strings"
 )
 
+// TarReadOptions control how tar streams are interpreted.
+// Currently only checksum derivation is configurable.
+type TarReadOptions struct {
+	// If true and ChecksumAlgorithm is set, compute file checksums while untarring
+	ComputeFileChecksum bool
+	// Algorithm name for checksums (e.g., "sha256", "sha512", "sha1")
+	ChecksumAlgorithm string
+}
+
 // ReadFromTarReader constructs a Folder from a tar stream (optionally gzip-compressed if caller wraps r).
-func ReadFromTarReader(r io.Reader) (*Folder, error) {
+func ReadFromTarReader(r io.Reader) (*Folder, error) { return ReadFromTarReaderWithOptions(r, TarReadOptions{}) }
+
+// ReadFromTarReaderWithOptions constructs a Folder from a tar stream with options.
+func ReadFromTarReaderWithOptions(r io.Reader, opts TarReadOptions) (*Folder, error) {
 	tr := tar.NewReader(r)
 	root := NewFolder()
 
@@ -43,16 +56,18 @@ func ReadFromTarReader(r io.Reader) (*Folder, error) {
 		case tar.TypeSymlink:
 			parent.Symlink(base, hdr.Linkname)
 		case tar.TypeReg, tar.TypeRegA:
-			// Read file content
-			var buf []byte
+			// Read file content (and optionally compute checksum on-the-fly)
+			var content []byte
+			var sum []byte
+			var readErr error
 			if hdr.Size > 0 {
-				buf = make([]byte, hdr.Size)
-				if _, err := io.ReadFull(tr, buf); err != nil {
-					return nil, err
-				}
+				content, sum, readErr = readTarFileContentAndChecksum(tr, hdr.Size, opts)
+				if readErr != nil { return nil, readErr }
 			}
-			file := parent.File(base, FileOptions{Content: buf, Mode: mode, MTime: hdr.ModTime, Size: hdr.Size})
-			_ = file // silence linters if not using fields immediately
+			file := parent.File(base, FileOptions{Content: content, Mode: mode, MTime: hdr.ModTime, Size: hdr.Size})
+			if opts.ComputeFileChecksum && opts.ChecksumAlgorithm != "" && sum != nil {
+				file.SetChecksum(opts.ChecksumAlgorithm, sum)
+			}
 		case tar.TypeLink:
 			// Hard links are not supported in fsdt
 			return nil, errors.New("tar: hard links not supported")
@@ -65,7 +80,10 @@ func ReadFromTarReader(r io.Reader) (*Folder, error) {
 }
 
 // ReadFromTarFile opens a .tar or .tar.gz file and returns a Folder.
-func ReadFromTarFile(path string) (*Folder, error) {
+func ReadFromTarFile(path string) (*Folder, error) { return ReadFromTarFileWithOptions(path, TarReadOptions{}) }
+
+// ReadFromTarFileWithOptions opens a .tar or .tar.gz with options and returns a Folder.
+func ReadFromTarFileWithOptions(path string, opts TarReadOptions) (*Folder, error) {
 	f, err := os.Open(path)
 	if err != nil { return nil, err }
 	defer f.Close()
@@ -74,9 +92,9 @@ func ReadFromTarFile(path string) (*Folder, error) {
 		gzr, err := gzip.NewReader(f)
 		if err != nil { return nil, err }
 		defer gzr.Close()
-		return ReadFromTarReader(gzr)
+		return ReadFromTarReaderWithOptions(gzr, opts)
 	}
-	return ReadFromTarReader(f)
+	return ReadFromTarReaderWithOptions(f, opts)
 }
 
 // WriteTarTo writes the Folder contents into a tar stream.
@@ -171,3 +189,30 @@ func isGzipTar(p string) bool {
 }
 
 func toTarPath(p string) string { return strings.ReplaceAll(filepath.ToSlash(p), "\\", "/") }
+
+// readTarFileContentAndChecksum streams file data from tr (exactly size bytes),
+// collecting content and optionally computing a checksum based on options.
+func readTarFileContentAndChecksum(tr io.Reader, size int64, opts TarReadOptions) ([]byte, []byte, error) {
+	if size == 0 {
+		return nil, nil, nil
+	}
+	// Fast path: no checksum
+	if !opts.ComputeFileChecksum || opts.ChecksumAlgorithm == "" {
+		buf := make([]byte, size)
+		_, err := io.ReadFull(tr, buf)
+		return buf, nil, err
+	}
+	// Compute checksum on-the-fly while buffering
+	h := newHash(opts.ChecksumAlgorithm)
+	if h == nil {
+		// Unknown algorithm: just read content
+		buf := make([]byte, size)
+		_, err := io.ReadFull(tr, buf)
+		return buf, nil, err
+	}
+	var buf bytes.Buffer
+	buf.Grow(int(size))
+	mw := io.MultiWriter(&buf, h)
+	if _, err := io.CopyN(mw, tr, size); err != nil { return nil, nil, err }
+	return buf.Bytes(), h.Sum(nil), nil
+}

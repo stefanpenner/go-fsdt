@@ -1,6 +1,8 @@
 package fsdt
 
 import (
+	"archive/tar"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,6 +76,48 @@ func Benchmark_Hash_WithSidecar(b *testing.B) {
 		_ = folder2.ReadFromWithOptions(root, LoadOptions{})
 		_, _, _ = folder2.EnsureChecksum(ChecksumOptions{Algorithm: "sha256", ComputeIfMissing: true, StreamFromDiskIfAvailable: true, SidecarDir: sidecar, RootPath: root})
 	}
+}
+
+// Benchmark untarring with and without checksum derivation, using medium-size files.
+func Benchmark_Untar_WithAndWithoutChecksum(b *testing.B) {
+	// build an in-memory tar with several files
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	files := map[string]int{
+		"a.bin": 256 * 1024,
+		"b.bin": 512 * 1024,
+		"c.bin": 1024 * 1024,
+	}
+	payload := bytes.Repeat([]byte{0xAB}, 1024)
+	for name, size := range files {
+		// file header
+		hdr := &tar.Header{Name: name, Mode: 0644, Size: int64(size)}
+		if err := tw.WriteHeader(hdr); err != nil { b.Fatal(err) }
+		remaining := size
+		for remaining > 0 {
+			chunk := payload
+			if remaining < len(chunk) { chunk = chunk[:remaining] }
+			if _, err := tw.Write(chunk); err != nil { b.Fatal(err) }
+			remaining -= len(chunk)
+		}
+	}
+	_ = tw.Close()
+
+	data := buf.Bytes()
+
+	b.Run("no-checksum", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_, err := ReadFromTarReader(bytes.NewReader(data))
+			if err != nil { b.Fatal(err) }
+		}
+	})
+	b.Run("checksum-sha256", func(b *testing.B) {
+		opts := TarReadOptions{ComputeFileChecksum: true, ChecksumAlgorithm: "sha256"}
+		for i := 0; i < b.N; i++ {
+			_, err := ReadFromTarReaderWithOptions(bytes.NewReader(data), opts)
+			if err != nil { b.Fatal(err) }
+		}
+	})
 }
 
 // helpers
