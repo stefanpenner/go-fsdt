@@ -259,8 +259,10 @@ type LoadOptions struct {
 	ChecksumAlgorithm string
 	// If true and no xattr is present, compute checksum from content using the provided algorithm
 	ComputeChecksumIfMissing bool
-	// If true, write the computed checksum back to xattr when missing
+	// If true, write any computed checksums back to xattr
 	WriteComputedChecksumToXAttr bool
+	// If true, do not load file bytes into memory; size and sourcePath are recorded for streaming/lazy ops
+	SkipContentRead bool
 	// If true, compute a folder-level checksum (from self + children) when missing
 	ComputeFolderChecksumIfMissing bool
 	// If true, write computed folder checksum back to xattr when missing
@@ -287,20 +289,15 @@ func (f *Folder) ReadFromWithOptions(path string, opts LoadOptions) error {
 			}
 		} else if entry.Type().IsRegular() {
 			full := filepath.Join(path, entry.Name())
-			content, err := os.ReadFile(full)
-			if err != nil {
-				return err
-			}
 			info, err := entry.Info()
-			if err != nil {
-				return err
+			if err != nil { return err }
+			var content []byte
+			if !opts.SkipContentRead {
+				data, err := os.ReadFile(full)
+				if err != nil { return err }
+				content = data
 			}
-			file := f.File(entry.Name(), FileOptions{
-				Content: content,
-				Mode:    info.Mode(),
-				MTime:   info.ModTime(),
-				Size:    info.Size(),
-			})
+			file := f.File(entry.Name(), FileOptions{ Content: content, Mode: info.Mode(), MTime: info.ModTime(), Size: info.Size() })
 			file.sourcePath = full
 
 			if opts.XAttrChecksumKey != "" {

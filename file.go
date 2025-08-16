@@ -207,12 +207,7 @@ func (f *File) EqualWithReason(entry FolderEntry) (bool, op.Reason) {
 		if bytes.Equal(f.content, file.content) {
 			return true, op.Reason{}
 		} else {
-			// TODO: maybe should show offset and first char difference
-			return false, op.Reason{
-				Type:   op.ContentChanged,
-				Before: f.content,
-				After:  file.content,
-			}
+			return false, reasonForContentChange(f.content, file.content, int64(len(f.content)), int64(len(file.content)))
 		}
 	}
 	return false, op.Reason{
