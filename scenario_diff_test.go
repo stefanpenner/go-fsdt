@@ -10,11 +10,8 @@ import (
 
 func Test_Scenario_FastVsAccurate(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
-
-	left.FileString("a.txt", "hello")
-	right.FileString("a.txt", "world")
+	left := FS(map[string]string{"a.txt": "hello"})
+	right := FS(map[string]string{"a.txt": "world"})
 
 	// Fast: structure-only + mode (content ignored) => no changes
 	d1 := DiffWithConfig(left, right, DefaultFast())
@@ -31,12 +28,8 @@ func Test_Scenario_ChecksumEnsure_With_Sidecar(t *testing.T) {
 	root := filepath.Join(dir, "root")
 	side := filepath.Join(dir, "cache")
 
-	left := NewFolder()
-	right := NewFolder()
-
-	// Same structure, different content
-	left.FileString("a.txt", "hello")
-	right.FileString("a.txt", "world")
+	left := FS(map[string]string{"a.txt": "hello"})
+	right := FS(map[string]string{"a.txt": "world"})
 
 	store := MultiStore{Stores: []ChecksumStore{SidecarStore{BaseDir: side, Root: root, Algorithm: "sha256"}}}
 	cfg := Checksums("sha256", store)
@@ -48,11 +41,8 @@ func Test_Scenario_ChecksumEnsure_With_Sidecar(t *testing.T) {
 
 func Test_Scenario_ChecksumPrefer_FallbackToBytes_Equal(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
-
-	left.FileString("a.txt", "same content")
-	right.FileString("a.txt", "same content")
+	left := FS(map[string]string{"a.txt": "same content"})
+	right := FS(map[string]string{"a.txt": "same content"})
 
 	cfg := DefaultAccurate()
 	// Switch to checksum-prefer but without any store/algorithm so it must fallback to bytes
@@ -65,11 +55,8 @@ func Test_Scenario_ChecksumPrefer_FallbackToBytes_Equal(t *testing.T) {
 
 func Test_Scenario_ChecksumPrefer_FallbackToBytes_Different_ExplainIncludesLengths(t *testing.T) {
 	require := require.New(t)
-	left := NewFolder()
-	right := NewFolder()
-
-	left.FileString("a.txt", "aaaaaaaaaa")
-	right.FileString("a.txt", "bbbbbbbbbb") // same length, different bytes
+	left := FS(map[string]string{"a.txt": "aaaaaaaaaa"})
+	right := FS(map[string]string{"a.txt": "bbbbbbbbbb"}) // same length, different bytes
 
 	cfg := DefaultAccurate()
 	cfg.Strategy = ChecksumPrefer
