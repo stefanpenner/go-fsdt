@@ -77,6 +77,36 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 	return diffInternal(a, b, defaultDiffOptions(caseSensitive))
 }
 
+// New: unified-config diff
+func DiffWithConfig(a, b *Folder, cfg Config) op.Operation {
+	// map Config to DiffOptions
+	var strategy FileContentStrategy
+	switch cfg.Strategy {
+	case StructureOnly:
+		strategy = SkipContent
+	case Bytes:
+		strategy = CompareBytes
+	case ChecksumPrefer:
+		strategy = PreferChecksumOrBytes
+	case ChecksumRequire:
+		strategy = RequireChecksum
+	default:
+		strategy = CompareBytes
+	}
+	opts := DiffOptions{
+		CaseSensitive: cfg.CaseSensitive,
+		ContentStrategy: strategy,
+		ChecksumAlgorithm: cfg.Algorithm,
+		CompareMode: cfg.CompareMode,
+		CompareSize: cfg.CompareSize,
+		CompareMTime: cfg.CompareMTime,
+		ComputeChecksumIfMissing: cfg.Strategy == ChecksumPrefer || cfg.Strategy == ChecksumRequire,
+		WriteComputedChecksumToXAttr: false, // store handled externally via EnsureChecksum if desired
+		StreamFromDiskIfAvailable: true,
+	}
+	return diffInternal(a, b, opts)
+}
+
 func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
 	dirValue := op.DirValue{}
 
