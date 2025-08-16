@@ -452,6 +452,9 @@ func computeFolderChecksum(folder *Folder, algorithm string) []byte {
 	ioWriteString(h, fmt.Sprintf("dir|mode:%o\n", folder.mode))
 	// include each child (sorted by name)
 	for _, name := range folder.Entries() {
+		if shouldExclude(normalizePath("", name), folder.excludeGlobs) {
+			continue
+		}
 		entry := folder._entries[name]
 		// for files and folders, prefer their checksum; compute if file has none
 		switch e := entry.(type) {

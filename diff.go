@@ -101,13 +101,23 @@ func DiffWithConfig(a, b *Folder, cfg Config) op.Operation {
 		CompareSize: cfg.CompareSize,
 		CompareMTime: cfg.CompareMTime,
 		ComputeChecksumIfMissing: cfg.Strategy == ChecksumPrefer || cfg.Strategy == ChecksumRequire,
-		WriteComputedChecksumToXAttr: false, // store handled externally via EnsureChecksum if desired
+		WriteComputedChecksumToXAttr: false,
 		StreamFromDiskIfAvailable: true,
 	}
-	return diffInternal(a, b, opts)
+	return diffInternalWithExcludes(a, b, opts, cfg.ExcludeGlobs, cfg.ExcludeGlobs, "")
 }
 
+// Backwards-compatible wrapper without excludes
 func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
+	return diffInternalWithExcludes(a, b, opts, nil, nil, "")
+}
+
+func diffInternalWithExcludes(a, b *Folder, opts DiffOptions, aEx, bEx []string, prefix string) op.Operation {
+	// if exclude globs differ, raise error by returning a Change op with a Reason
+	if !sameStringSet(aEx, bEx) {
+		return op.Operation{Operand: op.ChangeFolder, RelativePath: prefix, Value: op.DirValue{Reason: op.Reason{Type: op.Because, Before: aEx, After: bEx}}}
+	}
+
 	dirValue := op.DirValue{}
 
 	a_index := 0
@@ -120,10 +130,19 @@ func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
 		sortStringsToLower(b_keys)
 	}
 
-	// iterate over both arrays subset of those arrays that are the same length
 	for a_index < len(a_keys) && b_index < len(b_keys) {
 		a_key := a_keys[a_index]
 		b_key := b_keys[b_index]
+
+		// exclude filtered entries
+		if shouldExclude(normalizePath(prefix, a_key), aEx) {
+			a_index++
+			continue
+		}
+		if shouldExclude(normalizePath(prefix, b_key), bEx) {
+			b_index++
+			continue
+		}
 
 		a_comparable := a_key
 		b_comparable := b_key
@@ -141,7 +160,6 @@ func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
 			b_type := b_entry.Type()
 
 			if a_type == FILE && b_type == FILE {
-				// File vs file: possibly custom comparison
 				changed, reason := filesDifferWithReason(a_entry.(*File), b_entry.(*File), opts)
 				if changed {
 					dirValue.AddOperations(a_entry.ChangeOperation(b_key, reason))
@@ -149,15 +167,11 @@ func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
 			} else {
 				equal, reason := a_entry.EqualWithReason(b_entry)
 				if equal {
-					// do nothing!
+					// do nothing
 				} else if a_type == FOLDER && b_type == FOLDER {
 					a_entry := a_entry.(*Folder)
 					b_entry := b_entry.(*Folder)
-
-					// TODO: folder modes, permissions etc. can change
-					// they are both folders, so we recurse
-					operation := diffInternal(a_entry, b_entry, opts)
-
+					operation := diffInternalWithExcludes(a_entry, b_entry, opts, aEx, bEx, normalizePath(prefix, b_key))
 					operation.RelativePath = b_key
 					if operation.Operand != op.Noop {
 						dirValue.AddOperations(operation)
@@ -175,39 +189,40 @@ func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
 			a_index++
 			b_index++
 		} else if a_key < b_key {
-			// a is missing from b
+			if shouldExclude(normalizePath(prefix, a_key), aEx) {
+				a_index++
+				continue
+			}
 			a_index++
-
-			dirValue.AddOperations(a.RemoveChildOperation(a_key, op.Reason{})) // TODO: missing reason
+			dirValue.AddOperations(a.RemoveChildOperation(a_key, op.Reason{}))
 		} else if a_key > b_key {
-			// b is missing form a
+			if shouldExclude(normalizePath(prefix, b_key), bEx) {
+				b_index++
+				continue
+			}
 			b_index++
-			dirValue.AddOperations(b.CreateChildOperation(b_key, op.Reason{})) // TODO: missing reason
+			dirValue.AddOperations(b.CreateChildOperation(b_key, op.Reason{}))
 		} else {
 			panic("fsdt/diff.go(unreachable)")
 		}
 	}
 
-	// either both, or one of the arrays is exhausted
-	// if stuff remains in A, remove them
 	for a_index < len(a_keys) {
 		relative_path := a_keys[a_index]
 		a_index++
+		if shouldExclude(normalizePath(prefix, relative_path), aEx) { continue }
 		dirValue.AddOperations(a.RemoveChildOperation(relative_path, op.Reason{}))
 	}
-
-	// if stuff remains in B, add them
 	for b_index < len(b_keys) {
 		relative_path := b_keys[b_index]
 		b_index++
+		if shouldExclude(normalizePath(prefix, relative_path), bEx) { continue }
 		dirValue.AddOperations(b.CreateChildOperation(relative_path, op.Reason{}))
 	}
 
 	if len(dirValue.Operations) == 0 {
-		// TODO: also check if the dirs themselves changed (mode, permissions)
 		return op.Nothing
 	}
-
 	result := a.ChangeOperation(".", op.Reason{})
 	result.Value = dirValue
 	return result

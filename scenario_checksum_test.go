@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	op "github.com/stefanpenner/go-fsdt/operation"
 	"github.com/stretchr/testify/require"
 )
 
@@ -87,4 +88,41 @@ func Test_FileChecksum_StreamVsMemory(t *testing.T) {
 	d2, _, ok2 := file.EnsureChecksum(ChecksumOptions{Algorithm: "sha256", ComputeIfMissing: true, StreamFromDiskIfAvailable: false})
 	require.True(ok2)
 	require.Equal(d1, d2)
+}
+
+func Test_ExcludeGlobs_Diff_And_FolderChecksum(t *testing.T) {
+	require := require.New(t)
+	dir := t.TempDir()
+	rootA := filepath.Join(dir, "a")
+	rootB := filepath.Join(dir, "b")
+	_ = os.MkdirAll(filepath.Join(rootA, "tmp"), 0755)
+	_ = os.MkdirAll(filepath.Join(rootB, "tmp"), 0755)
+	_ = os.WriteFile(filepath.Join(rootA, "keep.txt"), []byte("1"), 0644)
+	_ = os.WriteFile(filepath.Join(rootB, "keep.txt"), []byte("2"), 0644)
+	_ = os.WriteFile(filepath.Join(rootA, "tmp", "x.log"), []byte("noise"), 0644)
+	_ = os.WriteFile(filepath.Join(rootB, "tmp", "x.log"), []byte("noise"), 0644)
+
+	a := NewFolder()
+	b := NewFolder()
+	require.NoError(a.ReadFromWithOptions(rootA, LoadOptions{}))
+	require.NoError(b.ReadFromWithOptions(rootB, LoadOptions{}))
+
+	cfg := DefaultAccurate()
+	cfg.ExcludeGlobs = []string{"tmp/**"}
+	d := DiffWithConfig(a, b, cfg)
+	require.NotEqual(op.Nothing, d) // keep.txt differs
+
+	// Different globs => incompatible
+	cfgB := cfg
+	cfgB.ExcludeGlobs = []string{"tmp/**", "other/**"}
+	d2 := DiffWithConfig(a, b, cfgB)
+	require.Equal(op.ChangeFolder, d2.Operand)
+
+	// Folder checksum excludes tmp/**
+	a.SetExcludeGlobs(cfg.ExcludeGlobs)
+	b.SetExcludeGlobs(cfg.ExcludeGlobs)
+	_, _, oka := a.EnsureChecksum(ChecksumOptions{Algorithm: "sha256", ComputeIfMissing: true})
+	_, _, okb := b.EnsureChecksum(ChecksumOptions{Algorithm: "sha256", ComputeIfMissing: true})
+	require.True(oka)
+	require.True(okb)
 }
