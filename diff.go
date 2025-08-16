@@ -272,11 +272,7 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		}
 		fallthrough
 	case CompareBytes:
-		// Compare bytes only if bytes mode
-		if opts.ContentStrategy != CompareBytes {
-			// do not fallback to bytes when strategy is not bytes-preferred
-			return true, op.Reason{Type: op.Because, Before: "no checksum", After: "no checksum"}
-		}
+		// Compare raw bytes; also used as fallback when checksums are unavailable or mismatched
 		if string(a.content) == string(b.content) {
 			return false, op.Reason{}
 		}
