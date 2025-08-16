@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	cerrs "github.com/cockroachdb/errors"
 	fsdt "github.com/stefanpenner/go-fsdt"
 	op "github.com/stefanpenner/go-fsdt/operation"
 )
@@ -68,9 +69,9 @@ var rootCmd = &cobra.Command{
 		}
 		ui.SetTask("Scanning")
 		ui.SetScanDir(left)
-		if err := a.ReadFromWithOptions(left, load); err != nil { return err }
+		if err := a.ReadFromWithOptions(left, load); err != nil { return cerrs.Wrapf(err, "failed to scan left: %s", left) }
 		ui.SetScanDir(right)
-		if err := b.ReadFromWithOptions(right, load); err != nil { return err }
+		if err := b.ReadFromWithOptions(right, load); err != nil { return cerrs.Wrapf(err, "failed to scan right: %s", right) }
 
 		// Config
 		cfg := fsdt.Config{CaseSensitive: !rootOpts.caseInsensitive}
@@ -81,7 +82,7 @@ var rootCmd = &cobra.Command{
 		case "checksum-ensure": cfg = fsdt.Checksums(rootOpts.algo, store); cfg.Strategy = fsdt.ChecksumEnsure
 		case "checksum-require": cfg = fsdt.ChecksumsStrict(rootOpts.algo, store)
 		default:
-			return fmt.Errorf("unknown mode: %s", rootOpts.mode)
+			return cerrs.Newf("unknown mode: %s", rootOpts.mode)
 		}
 		cfg.CaseSensitive = !rootOpts.caseInsensitive
 		cfg.ExcludeGlobs = append([]string(nil), rootOpts.excludes...)
@@ -101,7 +102,7 @@ var rootCmd = &cobra.Command{
 		ui.SetTask("Diffing")
 		d := fsdt.DiffWithConfig(a, b, cfg)
 		if dv, ok := d.Value.(op.DirValue); ok && dv.Reason.Type == op.Because {
-			return fmt.Errorf("incompatible or missing prerequisites: %v -> %v", dv.Reason.Before, dv.Reason.After)
+			return cerrs.Newf("incompatible or missing prerequisites: %v -> %v", dv.Reason.Before, dv.Reason.After)
 		}
 
 		// Stop progress before printing results
@@ -117,7 +118,7 @@ var rootCmd = &cobra.Command{
 		case "paths":
 			for _, p := range collectPaths(d) { fmt.Println(p) }
 		default:
-			return fmt.Errorf("unknown format: %s", rootOpts.format)
+			return cerrs.Newf("unknown format: %s", rootOpts.format)
 		}
 		return nil
 	},
