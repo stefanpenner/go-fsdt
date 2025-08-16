@@ -32,6 +32,13 @@ func SetFileString(root *Folder, relPath string, content string) *File {
 	return folder.FileString(base, content)
 }
 
+// SetFileBytes creates or replaces a file at a nested relative path with binary content.
+func SetFileBytes(root *Folder, relPath string, data []byte) *File {
+	dir, base := filepath.Split(filepath.ToSlash(relPath))
+	folder := EnsureFolderPath(root, strings.TrimSuffix(dir, "/"))
+	return folder.File(base, FileOptions{Content: data})
+}
+
 // NewFolderFromStrings builds a folder from a map of path->string content.
 func NewFolderFromStrings(files map[string]string) *Folder {
 	root := NewFolder()
@@ -59,3 +66,30 @@ func BuildDeepFiles(depth, width int) *Folder {
 
 // CopyTreeVirtual returns a deep clone of the folder (virtual copy).
 func CopyTreeVirtual(src *Folder) *Folder { return src.Clone().(*Folder) }
+
+// SetBytes is a Folder method wrapper for SetFileBytes.
+func (f *Folder) SetBytes(relPath string, data []byte) *File { return SetFileBytes(f, relPath, data) }
+
+// GetPath retrieves an entry at a nested path.
+func (f *Folder) GetPath(relPath string) (FolderEntry, bool) {
+	dir, base := filepath.Split(filepath.ToSlash(relPath))
+	parent := EnsureFolderPath(f, strings.TrimSuffix(dir, "/"))
+	entry, ok := parent._entries[base]
+	return entry, ok
+}
+
+// InjectChecksumPath sets a checksum for a file or folder at the given path.
+func (f *Folder) InjectChecksumPath(relPath, algo string, digest []byte) bool {
+	entry, ok := f.GetPath(relPath)
+	if !ok { return false }
+	switch v := entry.(type) {
+	case *File:
+		v.SetChecksum(algo, digest)
+		return true
+	case *Folder:
+		v.SetChecksum(algo, digest)
+		return true
+	default:
+		return false
+	}
+}

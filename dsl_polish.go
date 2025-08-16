@@ -88,3 +88,32 @@ func Store(stores ...ChecksumStore) ChecksumStore {
 		return MultiStore{Stores: stores}
 	}
 }
+
+// XAttr helpers (on-disk) for tests that write trees to disk
+func (f *Folder) XAttrWrite(path, key string, digest []byte) error {
+	entry, ok := f.GetPath(path)
+	if !ok { return errors.New("xattr write: path not found") }
+	switch v := entry.(type) {
+	case *File:
+		if p, has := v.SourcePath(); has { return writeXAttrChecksum(p, key, digest) }
+	case *Folder:
+		if v.sourcePath != "" { return writeXAttrChecksum(v.sourcePath, key, digest) }
+	}
+	return errors.New("xattr write: no on-disk source path")
+}
+
+func (f *Folder) XAttrRead(path, key string) ([]byte, bool) {
+	entry, ok := f.GetPath(path)
+	if !ok { return nil, false }
+	switch v := entry.(type) {
+	case *File:
+		if p, has := v.SourcePath(); has {
+			if d, ok, _ := readXAttrChecksum(p, key); ok { return d, true }
+		}
+	case *Folder:
+		if v.sourcePath != "" {
+			if d, ok, _ := readXAttrChecksum(v.sourcePath, key); ok { return d, true }
+		}
+	}
+	return nil, false
+}
