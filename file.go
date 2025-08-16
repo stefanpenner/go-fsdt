@@ -16,6 +16,7 @@ type File struct {
 	checksumAlgorithm string
 	mtime   time.Time
 	size    int64
+	sourcePath string
 }
 
 type FileOptions struct {
@@ -74,6 +75,7 @@ func (f *File) Clone() FolderEntry {
 		checksumAlgorithm: f.checksumAlgorithm,
 		mtime:             f.mtime,
 		size:              f.size,
+		sourcePath:        f.sourcePath,
 	}
 }
 
@@ -125,6 +127,13 @@ func (f *File) MTime() time.Time {
 
 func (f *File) Size() int64 {
 	return f.size
+}
+
+func (f *File) SourcePath() (string, bool) {
+	if f.sourcePath == "" {
+		return "", false
+	}
+	return f.sourcePath, true
 }
 
 func (f *File) ContentString() string {

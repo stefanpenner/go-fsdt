@@ -242,6 +242,7 @@ func (f *Folder) ReadFromWithOptions(path string, opts LoadOptions) error {
 				MTime:   info.ModTime(),
 				Size:    info.Size(),
 			})
+			file.sourcePath = full
 
 			if opts.XAttrChecksumKey != "" {
 				if digest, ok, _ := readXAttrChecksum(full, opts.XAttrChecksumKey); ok {

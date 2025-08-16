@@ -52,6 +52,12 @@ type DiffOptions struct {
 	CompareMTime bool // default false
 	// If true, compute checksum when missing and ContentStrategy needs one (for in-memory trees)
 	ComputeChecksumIfMissing bool
+	// If true, when ComputeChecksumIfMissing occurs and a file has a source path, write checksum to xattr
+	WriteComputedChecksumToXAttr bool
+	// If set, xattr key to write when WriteComputedChecksumToXAttr is true (e.g., "user.sha256")
+	XAttrChecksumKey string
+	// If true and both files have source paths, prefer streaming file content from disk for checksum/byte compare
+	StreamFromDiskIfAvailable bool
 }
 
 func defaultDiffOptions(caseSensitive bool) DiffOptions {
@@ -190,14 +196,8 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		ad, an, aok := a.Checksum()
 		bd, bn, bok := b.Checksum()
 		if (!aok || !bok) && opts.ComputeChecksumIfMissing && opts.ChecksumAlgorithm != "" {
-			if !aok {
-				a.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, a.content))
-				ad, an, aok = a.Checksum()
-			}
-			if !bok {
-				b.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, b.content))
-				bd, bn, bok = b.Checksum()
-			}
+			ad, an, aok = ensureChecksum(a, ad, an, aok, opts)
+			bd, bn, bok = ensureChecksum(b, bd, bn, bok, opts)
 		}
 		if !aok || !bok {
 			return true, op.Reason{Type: op.ContentChanged, Before: "missing checksum", After: "missing checksum"}
@@ -213,14 +213,8 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		ad, an, aok := a.Checksum()
 		bd, bn, bok := b.Checksum()
 		if (!aok || !bok) && opts.ComputeChecksumIfMissing && opts.ChecksumAlgorithm != "" {
-			if !aok {
-				a.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, a.content))
-				ad, an, aok = a.Checksum()
-			}
-			if !bok {
-				b.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, b.content))
-				bd, bn, bok = b.Checksum()
-			}
+			ad, an, aok = ensureChecksum(a, ad, an, aok, opts)
+			bd, bn, bok = ensureChecksum(b, bd, bn, bok, opts)
 		}
 		if aok && bok && (opts.ChecksumAlgorithm == "" || (an == opts.ChecksumAlgorithm && bn == opts.ChecksumAlgorithm)) {
 			if bytesEqual(ad, bd) {
@@ -230,6 +224,15 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		}
 		fallthrough
 	case CompareBytes:
+		// If streaming is preferred and both files have a source path, stream-compare
+		if opts.StreamFromDiskIfAvailable {
+			if ok := streamEqualByPath(a, b); ok != nil {
+				if *ok {
+					return false, op.Reason{}
+				}
+				return true, op.Reason{Type: op.ContentChanged, Before: "stream-compare", After: "stream-compare"}
+			}
+		}
 		if string(a.content) == string(b.content) {
 			return false, op.Reason{}
 		}
@@ -240,6 +243,34 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		}
 		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
 	}
+}
+
+func ensureChecksum(f *File, d []byte, n string, ok bool, opts DiffOptions) ([]byte, string, bool) {
+	if ok {
+		return d, n, ok
+	}
+	var content []byte
+	if opts.StreamFromDiskIfAvailable {
+		if path, has := f.SourcePath(); has {
+			if data, err := readAllStreaming(path); err == nil {
+				content = data
+			}
+		}
+	}
+	if content == nil {
+		content = f.content
+	}
+	d = computeChecksum(opts.ChecksumAlgorithm, content)
+	if d != nil {
+		f.SetChecksum(opts.ChecksumAlgorithm, d)
+		if opts.WriteComputedChecksumToXAttr {
+			if path, has := f.SourcePath(); has && opts.XAttrChecksumKey != "" {
+				_ = writeXAttrChecksum(path, opts.XAttrChecksumKey, d)
+			}
+		}
+		return d, opts.ChecksumAlgorithm, true
+	}
+	return nil, n, false
 }
 
 func fileMetadataDiff(a, b *File, opts DiffOptions) (bool, op.Reason) {
