@@ -273,12 +273,18 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		fallthrough
 	case CompareBytes:
 		// Compare raw bytes; also used as fallback when checksums are unavailable or mismatched
-		if string(a.content) == string(b.content) {
+		if len(a.content) != len(b.content) {
+			return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
+		}
+		if bytesEqual(a.content, b.content) {
 			return false, op.Reason{}
 		}
 		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
 	default:
-		if string(a.content) == string(b.content) {
+		if len(a.content) != len(b.content) {
+			return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
+		}
+		if bytesEqual(a.content, b.content) {
 			return false, op.Reason{}
 		}
 		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
