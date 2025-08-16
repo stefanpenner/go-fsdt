@@ -23,7 +23,7 @@ func (s *stringSliceFlag) Set(v string) error {
 
 func main() {
 	var (
-		mode      = flag.String("mode", "accurate", "diff mode: fast|accurate|checksum|checksum-strict")
+		mode      = flag.String("mode", "accurate", "diff mode: fast|accurate|checksum|checksum-ensure|checksum-require")
 		algo      = flag.String("algo", "sha256", "checksum algorithm when using checksum modes")
 		xattrKey  = flag.String("xattr", "", "xattr key for reading/writing checksums (e.g., user.sha256)")
 		sidecar   = flag.String("sidecar", "", "sidecar directory to store checksums")
@@ -78,7 +78,8 @@ func main() {
 	case "fast": cfg = fsdt.DefaultFast()
 	case "accurate": cfg = fsdt.DefaultAccurate()
 	case "checksum": cfg = fsdt.Checksums(*algo, store)
-	case "checksum-strict": cfg = fsdt.ChecksumsStrict(*algo, store)
+	case "checksum-ensure": cfg = fsdt.Checksums(*algo, store); cfg.Strategy = fsdt.ChecksumEnsure
+	case "checksum-require": cfg = fsdt.ChecksumsStrict(*algo, store)
 	default:
 		fatal(fmt.Errorf("unknown mode: %s", *mode))
 	}

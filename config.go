@@ -6,6 +6,7 @@ const (
 	StructureOnly CompareStrategy = iota
 	Bytes
 	ChecksumPrefer
+	ChecksumEnsure
 	ChecksumRequire
 )
 

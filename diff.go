@@ -88,6 +88,8 @@ func DiffWithConfig(a, b *Folder, cfg Config) op.Operation {
 		strategy = CompareBytes
 	case ChecksumPrefer:
 		strategy = PreferChecksumOrBytes
+	case ChecksumEnsure:
+		strategy = RequireChecksum // we will ensure below and not fallback to bytes
 	case ChecksumRequire:
 		strategy = RequireChecksum
 	default:
@@ -100,7 +102,7 @@ func DiffWithConfig(a, b *Folder, cfg Config) op.Operation {
 		CompareMode: cfg.CompareMode,
 		CompareSize: cfg.CompareSize,
 		CompareMTime: cfg.CompareMTime,
-		ComputeChecksumIfMissing: cfg.Strategy == ChecksumPrefer || cfg.Strategy == ChecksumRequire,
+		ComputeChecksumIfMissing: cfg.Strategy == ChecksumPrefer || cfg.Strategy == ChecksumEnsure,
 		WriteComputedChecksumToXAttr: false,
 		StreamFromDiskIfAvailable: true,
 	}
@@ -245,10 +247,11 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 			bd, bn, bok = ensureChecksum(b, bd, bn, bok, opts)
 		}
 		if !aok || !bok {
-			return true, op.Reason{Type: op.ContentChanged, Before: "missing checksum", After: "missing checksum"}
+			// incompatible: missing required checksum
+			return true, op.Reason{Type: op.Because, Before: "missing checksum", After: "missing checksum"}
 		}
 		if opts.ChecksumAlgorithm != "" && (an != opts.ChecksumAlgorithm || bn != opts.ChecksumAlgorithm) {
-			return true, op.Reason{Type: op.ContentChanged, Before: an, After: bn}
+			return true, op.Reason{Type: op.Because, Before: an, After: bn}
 		}
 		if bytesEqual(ad, bd) {
 			return false, op.Reason{}
@@ -269,14 +272,10 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		}
 		fallthrough
 	case CompareBytes:
-		// If streaming is preferred and both files have a source path, stream-compare
-		if opts.StreamFromDiskIfAvailable {
-			if ok := streamEqualByPath(a, b); ok != nil {
-				if *ok {
-					return false, op.Reason{}
-				}
-				return true, op.Reason{Type: op.ContentChanged, Before: "stream-compare", After: "stream-compare"}
-			}
+		// Compare bytes only if bytes mode
+		if opts.ContentStrategy != CompareBytes {
+			// do not fallback to bytes when strategy is not bytes-preferred
+			return true, op.Reason{Type: op.Because, Before: "no checksum", After: "no checksum"}
 		}
 		if string(a.content) == string(b.content) {
 			return false, op.Reason{}
