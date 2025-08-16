@@ -38,6 +38,11 @@ func NewFolder(cb ...func(f *Folder)) *Folder {
 	return folder
 }
 
+// Put inserts or replaces an entry under the given name.
+func (f *Folder) Put(name string, entry FolderEntry) {
+	f._entries[name] = entry
+}
+
 func (f *Folder) SetExcludeGlobs(globs []string) {
 	f.excludeGlobs = append([]string(nil), globs...)
 }
