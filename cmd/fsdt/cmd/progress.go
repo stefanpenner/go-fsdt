@@ -4,97 +4,120 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
-	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/spinner"
 )
 
+type progressModel struct {
+	sp       spinner.Model
+	enabled  bool
+
+	// state (accessed only on Bubble Tea goroutine)
+	task    string
+	scanDir string
+	leftDone, leftTotal   uint64
+	rightDone, rightTotal uint64
+}
+
+type setTaskMsg string
+
+type setScanDirMsg string
+
+type setLeftTotalMsg uint64
+
+type setRightTotalMsg uint64
+
+type incLeftDoneMsg struct{}
+
+type incRightDoneMsg struct{}
+
+func newProgressModel(enabled bool, initial string) progressModel {
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	return progressModel{sp: sp, enabled: enabled, task: initial}
+}
+
+func (m progressModel) Init() tea.Cmd {
+	if !m.enabled {
+		return nil
+	}
+	return m.sp.Tick
+}
+
+func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if !m.enabled {
+		return m, nil
+	}
+	switch v := msg.(type) {
+	case tea.KeyMsg:
+		return m, nil
+	case tea.WindowSizeMsg:
+		return m, nil
+	case setTaskMsg:
+		m.task = string(v)
+		return m, nil
+	case setScanDirMsg:
+		m.scanDir = string(v)
+		return m, nil
+	case setLeftTotalMsg:
+		m.leftTotal = uint64(v)
+		return m, nil
+	case setRightTotalMsg:
+		m.rightTotal = uint64(v)
+		return m, nil
+	case incLeftDoneMsg:
+		m.leftDone++
+		return m, nil
+	case incRightDoneMsg:
+		m.rightDone++
+		return m, nil
+	default:
+		var cmd tea.Cmd
+		m.sp, cmd = m.sp.Update(msg)
+		return m, cmd
+	}
+}
+
+func (m progressModel) View() string {
+	if !m.enabled {
+		return ""
+	}
+	var parts []string
+	if m.task != "" {
+		parts = append(parts, m.task)
+	}
+	if m.scanDir != "" {
+		parts = append(parts, fmt.Sprintf("dir: %s", m.scanDir))
+	}
+	if m.leftTotal > 0 || m.rightTotal > 0 {
+		parts = append(parts, fmt.Sprintf("files L %d/%d R %d/%d", m.leftDone, m.leftTotal, m.rightDone, m.rightTotal))
+	}
+	line := strings.Join(parts, "  ·  ")
+	return fmt.Sprintf("\r\x1b[2K%s %s", m.sp.View(), line)
+}
+
 type progressUI struct {
-	enabled   bool
-	started   atomic.Bool
-	stopped   atomic.Bool
-
-	// status
-	task    atomic.Value // string
-	scanDir atomic.Value // string
-
-	leftDone  atomic.Uint64
-	leftTotal atomic.Uint64
-	rightDone  atomic.Uint64
-	rightTotal atomic.Uint64
-
-	// rendering
-	mu      sync.Mutex
-	ticker  *time.Ticker
-	stopCh  chan struct{}
-	frames  []string
-	frameIx int
+	enabled  bool
+	program  *tea.Program
+	started  atomic.Bool
+	stopped  atomic.Bool
 }
 
 func newProgressUI(enabled bool) *progressUI {
-	p := &progressUI{enabled: enabled}
-	p.frames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	p.task.Store("")
-	p.scanDir.Store("")
-	return p
+	return &progressUI{enabled: enabled}
 }
 
 func (p *progressUI) Start(initial string) {
 	if !p.enabled || p.started.Load() {
 		return
 	}
-	p.task.Store(initial)
-	p.stopCh = make(chan struct{})
-	p.ticker = time.NewTicker(100 * time.Millisecond)
+	m := newProgressModel(p.enabled, initial)
+	prog := tea.NewProgram(m, tea.WithOutput(os.Stderr))
+	p.program = prog
 	p.started.Store(true)
-	go p.loop()
-}
-
-func (p *progressUI) loop() {
-	for {
-		select {
-		case <-p.ticker.C:
-			p.renderOnce()
-		case <-p.stopCh:
-			p.clearLine()
-			return
-		}
-	}
-}
-
-func (p *progressUI) renderOnce() {
-	if !p.enabled {
-		return
-	}
-	p.mu.Lock()
-	p.frameIx = (p.frameIx + 1) % len(p.frames)
-	frame := p.frames[p.frameIx]
-	p.mu.Unlock()
-
-	task := p.getString(&p.task)
-	dir := p.getString(&p.scanDir)
-	ld, lt := p.leftDone.Load(), p.leftTotal.Load()
-	rd, rt := p.rightDone.Load(), p.rightTotal.Load()
-
-	var parts []string
-	if task != "" {
-		parts = append(parts, task)
-	}
-	if dir != "" {
-		parts = append(parts, fmt.Sprintf("dir: %s", dir))
-	}
-	if lt > 0 || rt > 0 {
-		parts = append(parts, fmt.Sprintf("files L %d/%d R %d/%d", ld, lt, rd, rt))
-	}
-	line := strings.Join(parts, "  ·  ")
-	fmt.Fprintf(os.Stderr, "\r\x1b[2K%s %s", frame, line)
-}
-
-func (p *progressUI) clearLine() {
-	if !p.enabled {
-		return
-	}
-	fmt.Fprint(os.Stderr, "\r\x1b[2K")
+	go func() { _, _ = prog.Run() }()
 }
 
 func (p *progressUI) Stop() {
@@ -102,24 +125,46 @@ func (p *progressUI) Stop() {
 		return
 	}
 	p.stopped.Store(true)
-	close(p.stopCh)
-	p.ticker.Stop()
-	// Move to next line so following stdout prints are clean
-	fmt.Fprintln(os.Stderr)
-}
-
-func (p *progressUI) getString(v *atomic.Value) string {
-	if s, ok := v.Load().(string); ok {
-		return s
+	if p.program != nil {
+		p.program.Quit()
 	}
-	return ""
+	// Clear the line and add a newline to separate from stdout output
+	fmt.Fprint(os.Stderr, "\r\x1b[2K\n")
 }
 
-// Setters used by the CLI flow
-func (p *progressUI) SetTask(s string) { p.task.Store(s) }
-func (p *progressUI) SetScanDir(s string) { p.scanDir.Store(s) }
+// Async setters via Bubble Tea messages
+func (p *progressUI) SetTask(s string) {
+	if p.enabled && p.program != nil {
+		p.program.Send(setTaskMsg(s))
+	}
+}
 
-func (p *progressUI) SetLeftTotal(n int)  { p.leftTotal.Store(uint64(n)) }
-func (p *progressUI) SetRightTotal(n int) { p.rightTotal.Store(uint64(n)) }
-func (p *progressUI) IncLeftDone()        { p.leftDone.Add(1) }
-func (p *progressUI) IncRightDone()       { p.rightDone.Add(1) }
+func (p *progressUI) SetScanDir(s string) {
+	if p.enabled && p.program != nil {
+		p.program.Send(setScanDirMsg(s))
+	}
+}
+
+func (p *progressUI) SetLeftTotal(n int) {
+	if p.enabled && p.program != nil {
+		p.program.Send(setLeftTotalMsg(n))
+	}
+}
+
+func (p *progressUI) SetRightTotal(n int) {
+	if p.enabled && p.program != nil {
+		p.program.Send(setRightTotalMsg(n))
+	}
+}
+
+func (p *progressUI) IncLeftDone() {
+	if p.enabled && p.program != nil {
+		p.program.Send(incLeftDoneMsg{})
+	}
+}
+
+func (p *progressUI) IncRightDone() {
+	if p.enabled && p.program != nil {
+		p.program.Send(incRightDoneMsg{})
+	}
+}
