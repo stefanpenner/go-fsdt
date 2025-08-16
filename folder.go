@@ -51,6 +51,28 @@ func (f *Folder) SetChecksum(algorithm string, digest []byte) {
 	f.checksum = append([]byte(nil), digest...)
 }
 
+// EnsureChecksum ensures this folder has a checksum; computes from children if missing and optionally writes xattr
+func (f *Folder) EnsureChecksum(opts ChecksumOptions) ([]byte, string, bool) {
+	if d, n, ok := f.Checksum(); ok {
+		if opts.WriteToXAttr && opts.XAttrKey != "" && f.sourcePath != "" {
+			_ = writeXAttrChecksum(f.sourcePath, opts.XAttrKey, d)
+		}
+		return d, n, true
+	}
+	if !opts.ComputeIfMissing || opts.Algorithm == "" {
+		return nil, "", false
+	}
+	d := computeFolderChecksum(f, opts.Algorithm)
+	if d == nil {
+		return nil, "", false
+	}
+	f.SetChecksum(opts.Algorithm, d)
+	if opts.WriteToXAttr && opts.XAttrKey != "" && f.sourcePath != "" {
+		_ = writeXAttrChecksum(f.sourcePath, opts.XAttrKey, d)
+	}
+	return d, opts.Algorithm, true
+}
+
 func (f *Folder) Entries() []string {
 	entries := make([]string, 0, len(f._entries))
 	for name := range f._entries {

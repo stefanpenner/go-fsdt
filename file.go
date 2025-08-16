@@ -140,6 +140,43 @@ func (f *File) ContentString() string {
 	return string(f.content)
 }
 
+// EnsureChecksum makes sure a checksum is present for this file and optionally persists it to xattr.
+func (f *File) EnsureChecksum(opts ChecksumOptions) ([]byte, string, bool) {
+	if d, n, ok := f.Checksum(); ok {
+		if opts.WriteToXAttr && opts.XAttrKey != "" {
+			if path, has := f.SourcePath(); has {
+				_ = writeXAttrChecksum(path, opts.XAttrKey, d)
+			}
+		}
+		return d, n, true
+	}
+	if !opts.ComputeIfMissing || opts.Algorithm == "" {
+		return nil, "", false
+	}
+	var content []byte
+	if opts.StreamFromDiskIfAvailable {
+		if path, has := f.SourcePath(); has {
+			if data, err := readAllStreaming(path); err == nil {
+				content = data
+			}
+		}
+	}
+	if content == nil {
+		content = f.content
+	}
+	d := computeChecksum(opts.Algorithm, content)
+	if d == nil {
+		return nil, "", false
+	}
+	f.SetChecksum(opts.Algorithm, d)
+	if opts.WriteToXAttr && opts.XAttrKey != "" {
+		if path, has := f.SourcePath(); has {
+			_ = writeXAttrChecksum(path, opts.XAttrKey, d)
+		}
+	}
+	return d, opts.Algorithm, true
+}
+
 // Checksum returns the stored checksum digest (if any) and its algorithm name.
 func (f *File) Checksum() ([]byte, string, bool) {
 	if len(f.checksum) == 0 {
