@@ -341,3 +341,138 @@ func bytesEqual(a, b []byte) bool {
 	}
 	return true
 }
+
+// DiffStreamWithConfig performs a diff and emits leaf operations as they are discovered.
+// Each emitted operation has its RelativePath normalized to include the full relative path from root.
+// Directory wrapper operations (ChangeDir) are not emitted; only leaf create/change/remove ops are streamed.
+func DiffStreamWithConfig(a, b *Folder, cfg Config, emit func(op.Operation), visitDir func(path string)) {
+	var strategy FileContentStrategy
+	switch cfg.Strategy {
+	case StructureOnly:
+		strategy = SkipContent
+	case Bytes:
+		strategy = CompareBytes
+	case ChecksumPrefer:
+		strategy = PreferChecksumOrBytes
+	case ChecksumEnsure:
+		strategy = RequireChecksum // we will ensure below and not fallback to bytes
+	case ChecksumRequire:
+		strategy = RequireChecksum
+	default:
+		strategy = CompareBytes
+	}
+	opts := DiffOptions{
+		CaseSensitive:            cfg.CaseSensitive,
+		ContentStrategy:          strategy,
+		ChecksumAlgorithm:        cfg.Algorithm,
+		CompareMode:              cfg.CompareMode,
+		CompareSize:              cfg.CompareSize,
+		CompareMTime:             cfg.CompareMTime,
+		ComputeChecksumIfMissing: cfg.Strategy == ChecksumPrefer || cfg.Strategy == ChecksumEnsure,
+		WriteComputedChecksumToXAttr: false,
+		StreamFromDiskIfAvailable:    true,
+	}
+	diffStreamInternalWithExcludes(a, b, opts, cfg.ExcludeGlobs, cfg.ExcludeGlobs, "", emit, visitDir)
+}
+
+func diffStreamInternalWithExcludes(a, b *Folder, opts DiffOptions, aEx, bEx []string, prefix string, emit func(op.Operation), visitDir func(path string)) {
+	if visitDir != nil {
+		visitDir(prefix)
+	}
+
+	a_index := 0
+	b_index := 0
+	a_keys := a.Entries()
+	b_keys := b.Entries()
+
+	if !opts.CaseSensitive {
+		sortStringsToLower(a_keys)
+		sortStringsToLower(b_keys)
+	}
+
+	for a_index < len(a_keys) && b_index < len(b_keys) {
+		a_key := a_keys[a_index]
+		b_key := b_keys[b_index]
+
+		// exclude filtered entries
+		if shouldExclude(normalizePath(prefix, a_key), aEx) {
+			a_index++
+			continue
+		}
+		if shouldExclude(normalizePath(prefix, b_key), bEx) {
+			b_index++
+			continue
+		}
+
+		a_comparable := a_key
+		b_comparable := b_key
+
+		if !opts.CaseSensitive {
+			a_comparable = strings.ToLower(a_comparable)
+			b_comparable = strings.ToLower(b_comparable)
+		}
+
+		if a_comparable == b_comparable {
+			a_entry := a.Get(a_key)
+			b_entry := b.Get(b_key)
+
+			a_type := a_entry.Type()
+			b_type := b_entry.Type()
+
+			if a_type == FILE && b_type == FILE {
+				changed, reason := filesDifferWithReason(a_entry.(*File), b_entry.(*File), opts)
+				if changed {
+					opr := a_entry.ChangeOperation(b_key, reason)
+					opr.RelativePath = normalizePath(prefix, opr.RelativePath)
+					emit(opr)
+				}
+			} else {
+				equal, reason := a_entry.EqualWithReason(b_entry)
+				if equal {
+					// do nothing
+				} else if a_type == FOLDER && b_type == FOLDER {
+					a_entry := a_entry.(*Folder)
+					b_entry := b_entry.(*Folder)
+					diffStreamInternalWithExcludes(a_entry, b_entry, opts, aEx, bEx, normalizePath(prefix, b_key), emit, visitDir)
+				} else if a_type == FILE && b_type == FILE {
+					// handled above
+				} else {
+					emit(a_entry.RemoveOperation(normalizePath(prefix, b_key), reason))
+					emit(b_entry.CreateOperation(normalizePath(prefix, b_key), reason))
+				}
+			}
+
+			a_index++
+			b_index++
+		} else if a_key < b_key {
+			if shouldExclude(normalizePath(prefix, a_key), aEx) {
+				a_index++
+				continue
+			}
+			a_index++
+			emit(a.RemoveChildOperation(normalizePath(prefix, a_key), op.Reason{}))
+		} else if a_key > b_key {
+			if shouldExclude(normalizePath(prefix, b_key), bEx) {
+				b_index++
+				continue
+			}
+			b_index++
+			emit(b.CreateChildOperation(normalizePath(prefix, b_key), op.Reason{}))
+		} else {
+			panic("fsdt/diff.go(unreachable)")
+		}
+	}
+
+	for a_index < len(a_keys) {
+		relative_path := a_keys[a_index]
+		a_index++
+		if shouldExclude(normalizePath(prefix, relative_path), aEx) { continue }
+		emit(a.RemoveChildOperation(normalizePath(prefix, relative_path), op.Reason{}))
+	}
+	for b_index < len(b_keys) {
+		relative_path := b_keys[b_index]
+		b_index++
+		if shouldExclude(normalizePath(prefix, relative_path), bEx) { continue }
+		emit(b.CreateChildOperation(normalizePath(prefix, relative_path), op.Reason{}))
+	}
+}

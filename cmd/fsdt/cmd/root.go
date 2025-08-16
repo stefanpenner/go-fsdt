@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,6 +26,7 @@ type options struct {
 	format string
 	excludes []string
 	progress string
+	out string
 }
 
 var rootOpts options
@@ -63,6 +65,15 @@ var rootCmd = &cobra.Command{
 		}
 		if rootOpts.algo == "" {
 			return cerrs.Newf("algo must not be empty")
+		}
+		if rootOpts.out != "" {
+			// Validate we can create/append the out file
+			f, err := os.Create(rootOpts.out)
+			if err != nil {
+				return cerrs.Wrapf(err, "failed to open --out file: %s", rootOpts.out)
+			}
+			f.Close()
+			_ = os.Remove(rootOpts.out) // will recreate on run
 		}
 
 		// Validate paths exist and are directories
@@ -140,27 +151,56 @@ var rootCmd = &cobra.Command{
 			precomputeTreeChecksumsWithProgress(b, rootOpts.algo, store, right, func(){ ui.IncRightDone() })
 		}
 
+		// Streaming diff and output
 		ui.SetTask("Diffing")
-		d := fsdt.DiffWithConfig(a, b, cfg)
-		if dv, ok := d.Value.(op.DirValue); ok && dv.Reason.Type == op.Because {
-			return cerrs.Newf("incompatible or missing prerequisites: %v -> %v", dv.Reason.Before, dv.Reason.After)
+		var out *os.File
+		var writer *bufio.Writer
+		var err error
+		if rootOpts.out != "" {
+			out, err = os.Create(rootOpts.out)
+			if err != nil { return cerrs.Wrapf(err, "failed to create out file: %s", rootOpts.out) }
+			defer out.Close()
+			writer = bufio.NewWriter(out)
+			defer writer.Flush()
 		}
 
-		// Stop progress before printing results
-		ui.Stop()
+		// Emit function writes each operation to stdout and optional file
+		emit := func(o op.Operation) {
+			switch rootOpts.format {
+			case "paths":
+				line := o.RelativePath + "\n"
+				if rootOpts.out != "" { _, _ = writer.WriteString(line) }
+				fmt.Print(line)
+			case "json":
+				// Stream one JSON object per line
+				b, _ := json.Marshal(o)
+				line := string(b) + "\n"
+				if rootOpts.out != "" { _, _ = writer.WriteString(line) }
+				fmt.Print(line)
+			default: // pretty/tree
+				// Defer pretty printing to end for non-streaming formats; fall back to path stream
+				line := o.RelativePath + "\n"
+				if rootOpts.out != "" { _, _ = writer.WriteString(line) }
+				fmt.Print(line)
+			}
+		}
 
-		switch rootOpts.format {
-		case "pretty", "tree":
+		// visitDir is used to show which directory we are currently diffing
+		visitDir := func(path string) { ui.SetScanDir(path) }
+
+		fsdt.DiffStreamWithConfig(a, b, cfg, emit, visitDir)
+
+		// If pretty/tree selected, compute full tree after stream for a single structured print
+		if rootOpts.format == "pretty" || rootOpts.format == "tree" {
+			ui.SetTask("Rendering")
+			d := fsdt.DiffWithConfig(a, b, cfg)
+			ui.Stop()
 			fmt.Println(op.Print(d))
-		case "json":
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(d)
-		case "paths":
-			for _, p := range collectPaths(d) { fmt.Println(p) }
-		default:
-			return cerrs.Newf("unknown format: %s", rootOpts.format)
+			return nil
 		}
+
+		// Stop progress before end in streaming cases
+		ui.Stop()
 		return nil
 	},
 }
@@ -177,6 +217,7 @@ func init() {
 	rootCmd.Flags().StringVar(&rootOpts.format, "format", "pretty", "output format: pretty|tree|json|paths")
 	rootCmd.Flags().StringArrayVar(&rootOpts.excludes, "exclude", nil, "exclude glob (repeatable), supports doublestar patterns")
 	rootCmd.Flags().StringVar(&rootOpts.progress, "progress", "auto", "progress: on|off|auto (defaults to auto, renders status to stderr)")
+	rootCmd.Flags().StringVar(&rootOpts.out, "out", "", "optional output file to stream results to")
 }
 
 func Execute() {
