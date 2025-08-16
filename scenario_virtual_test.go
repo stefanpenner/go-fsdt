@@ -12,8 +12,8 @@ func Test_Virtual_StructureOnly_Ignores_Content(t *testing.T) {
 	left := NewFolder()
 	right := NewFolder()
 
-	left.FileString("a.txt", "hello")
-	right.FileString("a.txt", "world")
+	SetFileString(left, "a.txt", "hello")
+	SetFileString(right, "a.txt", "world")
 
 	d := DiffWithConfig(left, right, DefaultFast())
 	require.Equal(op.Nothing, d)
@@ -24,8 +24,8 @@ func Test_Virtual_Bytes_Detects_Content(t *testing.T) {
 	left := NewFolder()
 	right := NewFolder()
 
-	left.FileString("a.txt", "hello")
-	right.FileString("a.txt", "world")
+	SetFileString(left, "a.txt", "hello")
+	SetFileString(right, "a.txt", "world")
 
 	d := DiffWithConfig(left, right, DefaultAccurate())
 	require.NotEqual(op.Nothing, d)
@@ -36,8 +36,8 @@ func Test_Virtual_ChecksumPrefer_With_Computed_Sums(t *testing.T) {
 	left := NewFolder()
 	right := NewFolder()
 
-	left.FileString("a.txt", "hello")
-	right.FileString("a.txt", "hello")
+	SetFileString(left, "a.txt", "hello")
+	SetFileString(right, "a.txt", "hello")
 
 	// Precompute checksums in-memory (no store)
 	_, _, _ = left.Get("a.txt").(*File).EnsureChecksum(ChecksumOptions{Algorithm: "sha256", ComputeIfMissing: true})
@@ -53,8 +53,8 @@ func Test_Virtual_ChecksumRequire_Missing_Returns_Incompatible(t *testing.T) {
 	left := NewFolder()
 	right := NewFolder()
 
-	left.FileString("a.txt", "hello")
-	right.FileString("a.txt", "hello")
+	SetFileString(left, "a.txt", "hello")
+	SetFileString(right, "a.txt", "hello")
 
 	cfg := ChecksumsStrict("sha256", nil) // require checksum, but none present
 	d := DiffWithConfig(left, right, cfg)
@@ -76,10 +76,10 @@ func Test_Virtual_ExcludeGlobs_Skips_Entries(t *testing.T) {
 	left := NewFolder()
 	right := NewFolder()
 
-	left.FileString("keep.txt", "1")
-	right.FileString("keep.txt", "2")
-	left.Folder("tmp", func(f *Folder) { f.FileString("x.log", "a") })
-	right.Folder("tmp", func(f *Folder) { f.FileString("x.log", "b") })
+	SetFileString(left, "keep.txt", "1")
+	SetFileString(right, "keep.txt", "2")
+	EnsureFolderPath(left, "tmp").FileString("x.log", "a")
+	EnsureFolderPath(right, "tmp").FileString("x.log", "b")
 
 	cfg := DefaultAccurate()
 	cfg.ExcludeGlobs = []string{"tmp/**"}
