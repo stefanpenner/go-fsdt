@@ -24,18 +24,26 @@ func (s *stringSliceFlag) Set(v string) error {
 func main() {
 	var (
 		mode      = flag.String("mode", "accurate", "diff mode: fast|accurate|checksum|checksum-ensure|checksum-require")
-		algo      = flag.String("algo", "sha256", "checksum algorithm when using checksum modes")
-		xattrKey  = flag.String("xattr", "", "xattr key for reading/writing checksums (e.g., user.sha256)")
-		sidecar   = flag.String("sidecar", "", "sidecar directory to store checksums")
-		root      = flag.String("root", "", "common root for sidecar relative paths (defaults to left path)")
-		precompute = flag.Bool("precompute", false, "precompute and persist checksums before diff (if store configured)")
+		algo      = flag.String("algo", "sha256", "checksum algorithm when using checksum modes (e.g., sha256)")
+		xattrKey  = flag.String("xattr", "", "xattr key for reading/writing checksums (e.g., Linux: user.sha256; macOS: com.yourorg.sha256 or sha256)")
+		sidecar   = flag.String("sidecar", "", "directory for external checksum cache files (sidecar). Files are mirrored by relative path under --root with extension .<algo>")
+		chkCache  = flag.String("checksum-cache-dir", "", "alias of --sidecar; directory for external checksum cache files")
+		root      = flag.String("root", "", "project root used to compute sidecar relative paths (defaults to left path)")
+		precompute = flag.Bool("precompute", false, "when using checksum modes with a store, compute and persist missing checksums before diff")
 		caseInsensitive = flag.Bool("ci", false, "case-insensitive diff")
 		format    = flag.String("format", "pretty", "output format: pretty|tree|json|paths")
 	)
 	var excludes stringSliceFlag
-	flag.Var(&excludes, "exclude", "exclude glob (repeatable)")
+	flag.Var(&excludes, "exclude", "exclude glob (repeatable). Uses doublestar patterns, e.g. tmp/** or **/*.log")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <left> <right>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <left> <right>\n\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Examples:")
+		fmt.Fprintln(os.Stderr, "  # Accurate byte diff with excludes")
+		fmt.Fprintln(os.Stderr, "  fsdt -mode accurate -exclude 'tmp/**' -exclude '**/*.log' ./left ./right\n")
+		fmt.Fprintln(os.Stderr, "  # Checksum ensure (compute+persist missing) using xattr and sidecar")
+		fmt.Fprintln(os.Stderr, "  fsdt -mode checksum-ensure -algo sha256 -xattr user.sha256 -checksum-cache-dir /tmp/cache ./left ./right\n")
+		fmt.Fprintln(os.Stderr, "  # Require existing checksums (error if missing)")
+		fmt.Fprintln(os.Stderr, "  fsdt -mode checksum-require -algo sha256 -checksum-cache-dir /tmp/cache ./left ./right\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -45,6 +53,11 @@ func main() {
 	}
 	left := filepath.Clean(flag.Arg(0))
 	right := filepath.Clean(flag.Arg(1))
+
+	// --checksum-cache-dir alias handling
+	if *chkCache != "" {
+		*sidecar = *chkCache
+	}
 	if *root == "" { *root = left }
 
 	// Build store from flags
@@ -87,7 +100,7 @@ func main() {
 	cfg.ExcludeGlobs = append([]string(nil), excludes...)
 
 	// Precompute if requested
-	if *precompute && store != nil && (cfg.Strategy == fsdt.ChecksumPrefer || cfg.Strategy == fsdt.ChecksumRequire) {
+	if *precompute && store != nil && (cfg.Strategy == fsdt.ChecksumPrefer || cfg.Strategy == fsdt.ChecksumEnsure) {
 		precomputeTreeChecksums(a, *algo, store, left)
 		precomputeTreeChecksums(b, *algo, store, right)
 	}
@@ -96,7 +109,7 @@ func main() {
 
 	// If the diff indicates incompatible excludes
 	if dv, ok := d.Value.(op.DirValue); ok && dv.Reason.Type == op.Because {
-		fatal(fmt.Errorf("incompatible exclude globs: left=%v right=%v", dv.Reason.Before, dv.Reason.After))
+		fatal(fmt.Errorf("incompatible or missing prerequisites: %v -> %v", dv.Reason.Before, dv.Reason.After))
 	}
 
 	switch *format {
