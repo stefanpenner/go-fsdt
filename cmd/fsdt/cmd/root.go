@@ -23,6 +23,7 @@ type options struct {
 	caseInsensitive bool
 	format string
 	excludes []string
+	noMtime bool
 }
 
 var rootOpts options
@@ -77,6 +78,10 @@ var rootCmd = &cobra.Command{
 		}
 		cfg.CaseSensitive = !rootOpts.caseInsensitive
 		cfg.ExcludeGlobs = append([]string(nil), rootOpts.excludes...)
+		// Apply mtime exclusion if requested (only disables, never enables)
+		if rootOpts.noMtime {
+			cfg.CompareMTime = false
+		}
 
 		// Precompute
 		if rootOpts.precompute && store != nil && (cfg.Strategy == fsdt.ChecksumPrefer || cfg.Strategy == fsdt.ChecksumEnsure) {
@@ -116,6 +121,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&rootOpts.caseInsensitive, "ci", false, "case-insensitive diff")
 	rootCmd.Flags().StringVar(&rootOpts.format, "format", "pretty", "output format: pretty|tree|json|paths")
 	rootCmd.Flags().StringArrayVar(&rootOpts.excludes, "exclude", nil, "exclude glob (repeatable), supports doublestar patterns")
+	rootCmd.Flags().BoolVar(&rootOpts.noMtime, "no-mtime", false, "exclude mtime from comparison")
 }
 
 func Execute() {
