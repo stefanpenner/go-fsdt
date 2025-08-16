@@ -143,10 +143,8 @@ func (f *File) ContentString() string {
 // EnsureChecksum makes sure a checksum is present for this file and optionally persists it to xattr.
 func (f *File) EnsureChecksum(opts ChecksumOptions) ([]byte, string, bool) {
 	if d, n, ok := f.Checksum(); ok {
-		if opts.WriteToXAttr && opts.XAttrKey != "" {
-			if path, has := f.SourcePath(); has {
-				_ = writeXAttrChecksum(path, opts.XAttrKey, d)
-			}
+		if path, has := f.SourcePath(); has {
+			writeChecksumCache(path, d, opts)
 		}
 		return d, n, true
 	}
@@ -169,10 +167,8 @@ func (f *File) EnsureChecksum(opts ChecksumOptions) ([]byte, string, bool) {
 		return nil, "", false
 	}
 	f.SetChecksum(opts.Algorithm, d)
-	if opts.WriteToXAttr && opts.XAttrKey != "" {
-		if path, has := f.SourcePath(); has {
-			_ = writeXAttrChecksum(path, opts.XAttrKey, d)
-		}
+	if path, has := f.SourcePath(); has {
+		writeChecksumCache(path, d, opts)
 	}
 	return d, opts.Algorithm, true
 }
