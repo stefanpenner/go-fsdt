@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -180,6 +181,18 @@ func collectPaths(d op.Operation) []string {
 }
 
 func loadPathAsFolder(path string, load fsdt.LoadOptions) (*fsdt.Folder, error) {
+	// If the path appears to be a tar archive, load via tar
+	lower := strings.ToLower(path)
+	if strings.HasSuffix(lower, ".tar") || strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz") {
+		// derive checksums during untar iff we are in checksum modes and algo is set
+		opts := fsdt.TarReadOptions{}
+		if load.ChecksumAlgorithm != "" {
+			opts.ComputeFileChecksum = true
+			opts.ChecksumAlgorithm = load.ChecksumAlgorithm
+		}
+		return fsdt.ReadFromTarFileWithOptions(path, opts)
+	}
+
 	info, err := os.Stat(path)
 	if err != nil { return nil, err }
 	if info.IsDir() {
