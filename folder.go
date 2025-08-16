@@ -193,11 +193,27 @@ func (f *Folder) WriteTo(location string) error {
 
 func ReadFrom(path string) (*Folder, error) {
 	folder := NewFolder()
-	error := folder.ReadFrom(path)
+	error := folder.ReadFromWithOptions(path, LoadOptions{})
 	return folder, error
 }
 
+// LoadOptions controls how filesystem metadata such as xattr checksums are loaded.
+type LoadOptions struct {
+	// If set, attempt to read checksum from xattr with this key (e.g., "user.sha256")
+	XAttrChecksumKey string
+	// Label to store with the checksum so algorithms can be matched during compare, e.g., "sha256"
+	ChecksumAlgorithm string
+	// If true and no xattr is present, compute checksum from content using the provided algorithm
+	ComputeChecksumIfMissing bool
+	// If true, write the computed checksum back to xattr when missing
+	WriteComputedChecksumToXAttr bool
+}
+
 func (f *Folder) ReadFrom(path string) error {
+	return f.ReadFromWithOptions(path, LoadOptions{})
+}
+
+func (f *Folder) ReadFromWithOptions(path string, opts LoadOptions) error {
 	dirs, err := os.ReadDir(path)
 	if err != nil {
 		return err
@@ -206,12 +222,13 @@ func (f *Folder) ReadFrom(path string) error {
 	for _, entry := range dirs {
 		if entry.IsDir() {
 			folder := f.Folder(entry.Name(), func(f *Folder) {})
-			err = folder.ReadFrom(filepath.Join(path, entry.Name()))
+			err = folder.ReadFromWithOptions(filepath.Join(path, entry.Name()), opts)
 			if err != nil {
 				return err
 			}
 		} else if entry.Type().IsRegular() {
-			content, err := os.ReadFile(filepath.Join(path, entry.Name()))
+			full := filepath.Join(path, entry.Name())
+			content, err := os.ReadFile(full)
 			if err != nil {
 				return err
 			}
@@ -219,12 +236,26 @@ func (f *Folder) ReadFrom(path string) error {
 			if err != nil {
 				return err
 			}
-			f.File(entry.Name(), FileOptions{
+			file := f.File(entry.Name(), FileOptions{
 				Content: content,
 				Mode:    info.Mode(),
 				MTime:   info.ModTime(),
 				Size:    info.Size(),
 			})
+
+			if opts.XAttrChecksumKey != "" {
+				if digest, ok, _ := readXAttrChecksum(full, opts.XAttrChecksumKey); ok {
+					file.SetChecksum(opts.ChecksumAlgorithm, digest)
+				} else if opts.ComputeChecksumIfMissing && opts.ChecksumAlgorithm != "" {
+					d := computeChecksum(opts.ChecksumAlgorithm, content)
+					if d != nil {
+						file.SetChecksum(opts.ChecksumAlgorithm, d)
+						if opts.WriteComputedChecksumToXAttr {
+							_ = writeXAttrChecksum(full, opts.XAttrChecksumKey, d)
+						}
+					}
+				}
+			}
 		} else if entry.Type()&os.ModeSymlink != 0 {
 			target, err := os.Readlink(filepath.Join(path, entry.Name()))
 			if err != nil {

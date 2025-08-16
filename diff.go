@@ -50,6 +50,8 @@ type DiffOptions struct {
 	CompareMode  bool // default true
 	CompareSize  bool // default false
 	CompareMTime bool // default false
+	// If true, compute checksum when missing and ContentStrategy needs one (for in-memory trees)
+	ComputeChecksumIfMissing bool
 }
 
 func defaultDiffOptions(caseSensitive bool) DiffOptions {
@@ -187,6 +189,16 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 	case RequireChecksum:
 		ad, an, aok := a.Checksum()
 		bd, bn, bok := b.Checksum()
+		if (!aok || !bok) && opts.ComputeChecksumIfMissing && opts.ChecksumAlgorithm != "" {
+			if !aok {
+				a.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, a.content))
+				ad, an, aok = a.Checksum()
+			}
+			if !bok {
+				b.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, b.content))
+				bd, bn, bok = b.Checksum()
+			}
+		}
 		if !aok || !bok {
 			return true, op.Reason{Type: op.ContentChanged, Before: "missing checksum", After: "missing checksum"}
 		}
@@ -200,6 +212,16 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 	case PreferChecksumOrBytes:
 		ad, an, aok := a.Checksum()
 		bd, bn, bok := b.Checksum()
+		if (!aok || !bok) && opts.ComputeChecksumIfMissing && opts.ChecksumAlgorithm != "" {
+			if !aok {
+				a.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, a.content))
+				ad, an, aok = a.Checksum()
+			}
+			if !bok {
+				b.SetChecksum(opts.ChecksumAlgorithm, computeChecksum(opts.ChecksumAlgorithm, b.content))
+				bd, bn, bok = b.Checksum()
+			}
+		}
 		if aok && bok && (opts.ChecksumAlgorithm == "" || (an == opts.ChecksumAlgorithm && bn == opts.ChecksumAlgorithm)) {
 			if bytesEqual(ad, bd) {
 				return false, op.Reason{}
