@@ -42,6 +42,12 @@ func DefaultAccurate() Config {
 	}
 }
 
+func DefaultAccurateNoMTime() Config {
+	cfg := DefaultAccurate()
+	cfg.CompareMTime = false
+	return cfg
+}
+
 func Checksums(algo string, store ChecksumStore) Config {
 	return Config{
 		CaseSensitive: true,
