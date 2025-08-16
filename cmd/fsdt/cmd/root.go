@@ -114,17 +114,18 @@ var rootCmd = &cobra.Command{
 
 		switch rootOpts.format {
 		case "pretty", "tree":
-			ui.UpdateStatus("Rendering…")
+			ui.Stop()
 			fmt.Println(op.Print(d))
 		case "json":
-			ui.UpdateStatus("Rendering JSON…")
+			ui.Stop()
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			return enc.Encode(d)
 		case "paths":
-			ui.UpdateStatus("Rendering paths…")
+			ui.Stop()
 			for _, p := range collectPaths(d) { fmt.Println(p) }
 		default:
+			ui.Stop()
 			return fmt.Errorf("unknown format: %s", rootOpts.format)
 		}
 		return nil

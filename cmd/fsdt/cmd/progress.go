@@ -42,7 +42,7 @@ func (m progressModel) View() string {
 		return ""
 	}
 	// Render to stderr; actual output is handled by Bubble Tea program options
-	return fmt.Sprintf("\r %s %s", m.sp.View(), m.status)
+	return fmt.Sprintf("\r%s %s", m.sp.View(), m.status)
 }
 
 type progressUI struct {
