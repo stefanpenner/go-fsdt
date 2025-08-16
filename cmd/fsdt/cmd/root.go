@@ -51,9 +51,7 @@ var rootCmd = &cobra.Command{
 		if len(stores) == 1 { store = stores[0] }
 		if len(stores) > 1 { store = fsdt.MultiStore{Stores: stores} }
 
-		// Load trees
-		a := fsdt.NewFolder()
-		b := fsdt.NewFolder()
+		// Load trees or single files
 		load := fsdt.LoadOptions{}
 		if rootOpts.xattrKey != "" {
 			load.XAttrChecksumKey = rootOpts.xattrKey
@@ -61,8 +59,10 @@ var rootCmd = &cobra.Command{
 			load.ComputeChecksumIfMissing = false
 			load.WriteComputedChecksumToXAttr = false
 		}
-		if err := a.ReadFromWithOptions(left, load); err != nil { return err }
-		if err := b.ReadFromWithOptions(right, load); err != nil { return err }
+		a, err := loadPathAsFolder(left, load)
+		if err != nil { return err }
+		b, err := loadPathAsFolder(right, load)
+		if err != nil { return err }
 
 		// Config
 		cfg := fsdt.Config{CaseSensitive: !rootOpts.caseInsensitive}
@@ -92,6 +92,8 @@ var rootCmd = &cobra.Command{
 		switch rootOpts.format {
 		case "pretty", "tree":
 			fmt.Println(op.Print(d))
+		case "explain":
+			fmt.Println(op.Explain(d))
 		case "json":
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
@@ -114,7 +116,7 @@ func init() {
 	rootCmd.Flags().StringVar(&rootOpts.root, "root", "", "project root for sidecar relative paths (defaults to left)")
 	rootCmd.Flags().BoolVar(&rootOpts.precompute, "precompute", false, "precompute and persist missing checksums before diff (when using a store)")
 	rootCmd.Flags().BoolVar(&rootOpts.caseInsensitive, "ci", false, "case-insensitive diff")
-	rootCmd.Flags().StringVar(&rootOpts.format, "format", "pretty", "output format: pretty|tree|json|paths")
+	rootCmd.Flags().StringVar(&rootOpts.format, "format", "pretty", "output format: pretty|tree|explain|json|paths")
 	rootCmd.Flags().StringArrayVar(&rootOpts.excludes, "exclude", nil, "exclude glob (repeatable), supports doublestar patterns")
 }
 
@@ -169,4 +171,21 @@ func collectPaths(d op.Operation) []string {
 	}
 	walk(d)
 	return out
+}
+
+func loadPathAsFolder(path string, load fsdt.LoadOptions) (*fsdt.Folder, error) {
+	info, err := os.Stat(path)
+	if err != nil { return nil, err }
+	if info.IsDir() {
+		f := fsdt.NewFolder()
+		if err := f.ReadFromWithOptions(path, load); err != nil { return nil, err }
+		return f, nil
+	}
+	// single file: wrap into a folder with that file
+	parent := fsdt.NewFolder()
+	content, err := os.ReadFile(path)
+	if err != nil { return nil, err }
+	_ = parent.File(filepath.Base(path), fsdt.FileOptions{Content: content, Mode: info.Mode(), MTime: info.ModTime(), Size: info.Size()})
+	// Note: we do not read xattr for single-file mode to avoid platform-specific calls here.
+	return parent, nil
 }
