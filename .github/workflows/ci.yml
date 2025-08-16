@@ -147,12 +147,12 @@ jobs:
 
     - name: Run All Quick Fuzz Tests
       run: |
-        echo "Running quick fuzz tests (30 seconds each)..."
+        echo "Running quick fuzz tests (2 minutes each)..."
         
         for test in FuzzFolderCreation FuzzFileOperations FuzzLinkOperations FuzzFolderOperations FuzzDiffOperations FuzzEdgeCases FuzzSerialization FuzzMemoryStress; do
           echo "🧪 Running: $test"
-          # Add individual test timeout: 30 seconds fuzz + 30 seconds buffer
-          timeout 60s go test -fuzz=$test -fuzztime=30s -parallel=4 -v || echo "⚠️  $test completed (may have found issues)"
+          # Add individual test timeout: 2 minutes fuzz + 1 minute buffer
+          timeout 180s go test -fuzz=$test -fuzztime=2m -parallel=4 -v || echo "⚠️  $test completed (may have found issues)"
           echo ""
         done
 
