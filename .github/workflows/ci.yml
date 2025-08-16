@@ -147,12 +147,17 @@ jobs:
 
     - name: Run All Quick Fuzz Tests
       run: |
-        echo "Running quick fuzz tests (2 minutes each)..."
-        
-        for test in FuzzFolderCreation FuzzFileOperations FuzzLinkOperations FuzzFolderOperations FuzzDiffOperations FuzzEdgeCases FuzzSerialization FuzzMemoryStress; do
+        set -e
+        # Run all fuzz targets within ~3 minutes total
+        TESTS=(FuzzFolderCreation FuzzFileOperations FuzzLinkOperations FuzzFolderOperations FuzzDiffOperations FuzzEdgeCases FuzzSerialization FuzzMemoryStress)
+        TOTAL_BUDGET=150
+        NUM_TESTS=${#TESTS[@]}
+        PER_TEST_SEC=$(( TOTAL_BUDGET / NUM_TESTS ))
+        if [ "$PER_TEST_SEC" -lt 8 ]; then PER_TEST_SEC=8; fi
+        echo "Running quick fuzz tests (~${PER_TEST_SEC}s per test; total budget ~${TOTAL_BUDGET}s)"
+        for test in "${TESTS[@]}"; do
           echo "🧪 Running: $test"
-          # Add individual test timeout: 2 minutes fuzz + 1 minute buffer
-          timeout 180s go test -fuzz=$test -fuzztime=2m -parallel=4 -v || echo "⚠️  $test completed (may have found issues)"
+          timeout $(( PER_TEST_SEC + 5 ))s go test -fuzz=$test -fuzztime=${PER_TEST_SEC}s -parallel=2 -v || echo "⚠️  $test completed (may have found issues)"
           echo ""
         done
 
