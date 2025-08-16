@@ -12,7 +12,7 @@ echo "🧪 Running go-fsdt tests in $MODE mode..."
 echo "======================================"
 
 # Configuration
-GO_VERSION="1.23.3"
+GO_VERSION="1.23.x"
 PARALLEL_WORKERS=8
 TIMEOUT_BUFFER=2
 
