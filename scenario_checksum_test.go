@@ -126,3 +126,23 @@ func Test_ExcludeGlobs_Diff_And_FolderChecksum(t *testing.T) {
 	require.True(oka)
 	require.True(okb)
 }
+
+func Test_XAttr_RoundTrip_With_DSL(t *testing.T) {
+	require := require.New(t)
+	root := filepath.Join(t.TempDir(), "root")
+
+	folder := FS(map[string]string{"a.txt": "hello"})
+	require.NoError(folder.WriteTo(root))
+
+	loaded := NewFolder()
+	require.NoError(loaded.ReadFrom(root))
+
+	// write xattr and read back
+	d := []byte{0xde, 0xad, 0xbe, 0xef}
+	require.NoError(loaded.XAttrWrite("a.txt", "user.sha256", d))
+	rd, ok := loaded.XAttrRead("a.txt", "user.sha256")
+	require.True(ok)
+	require.Equal(d, rd)
+
+	_ = os.RemoveAll(root)
+}

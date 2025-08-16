@@ -69,18 +69,13 @@ func TestFolderMode(t *testing.T) {
 
 func TestFolderStrings(t *testing.T) {
 	assert := assert.New(t)
-	folder := NewFolder()
-	folder.FileString("README.md", "## HI\n")
-	folder.Folder("lib", func(f *Folder) {
-		f.Folder("foo", func(f *Folder) {
-			f.Folder("bar", func(f *Folder) {
-				f.FileString("baz.go", "package baz\n")
-			})
-		})
-		f.FileString("lib.go", "package lib\n")
-		f.Symlink("lib-link.go", "lib.go")
-		f.Symlink("foo-link", "foo")
+	folder := FS(map[string]string{
+		"README.md":         "## HI\n",
+		"lib/foo/bar/baz.go": "package baz\n",
+		"lib/lib.go":         "package lib\n",
 	})
+	folder.Symlink("lib/lib-link.go", "lib.go")
+	folder.Symlink("lib/foo-link", "foo")
 
 	// Strings
 	assert.Equal([]string{"README.md", "lib/", "lib/foo/", "lib/foo/bar/", "lib/foo/bar/baz.go", "lib/foo-link -> foo", "lib/lib-link.go -> lib.go", "lib/lib.go"}, folder.Strings(""))
@@ -113,15 +108,10 @@ func TestFolderCallback(t *testing.T) {
 }
 
 func TestFolderToDirAndBack(t *testing.T) {
-	folder := NewFolder()
-	folder.FileString("README.md", "## HI\n")
-	folder.Folder("lib", func(f *Folder) {
-		f.Folder("foo", func(f *Folder) {
-			f.Folder("bar", func(f *Folder) {
-				f.FileString("baz.go", "package baz\n")
-			})
-		})
-		f.FileString("lib.go", "package lib\n")
+	folder := FS(map[string]string{
+		"README.md":         "## HI\n",
+		"lib/foo/bar/baz.go": "package baz\n",
+		"lib/lib.go":         "package lib\n",
 	})
 
 	tempDir := t.TempDir()
