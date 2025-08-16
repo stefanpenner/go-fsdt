@@ -23,6 +23,7 @@ type options struct {
 	caseInsensitive bool
 	format string
 	excludes []string
+	progress string
 }
 
 var rootOpts options
@@ -38,6 +39,10 @@ var rootCmd = &cobra.Command{
 			rootOpts.sidecar = rootOpts.chkCache
 		}
 		if rootOpts.root == "" { rootOpts.root = left }
+
+		ui := newProgressUI(shouldEnableProgress(rootOpts.progress))
+		ui.Start("Starting…")
+		defer ui.Stop()
 
 		// Build store chain
 		var stores []fsdt.ChecksumStore
@@ -61,7 +66,9 @@ var rootCmd = &cobra.Command{
 			load.ComputeChecksumIfMissing = false
 			load.WriteComputedChecksumToXAttr = false
 		}
+		ui.UpdateStatus("Scanning: %s", left)
 		if err := a.ReadFromWithOptions(left, load); err != nil { return err }
+		ui.UpdateStatus("Scanning: %s", right)
 		if err := b.ReadFromWithOptions(right, load); err != nil { return err }
 
 		// Config
@@ -80,10 +87,26 @@ var rootCmd = &cobra.Command{
 
 		// Precompute
 		if rootOpts.precompute && store != nil && (cfg.Strategy == fsdt.ChecksumPrefer || cfg.Strategy == fsdt.ChecksumEnsure) {
-			precomputeTreeChecksums(a, rootOpts.algo, store, left)
-			precomputeTreeChecksums(b, rootOpts.algo, store, right)
+			leftTotal := countFiles(a)
+			rightTotal := countFiles(b)
+			var leftDone, rightDone int
+			ui.UpdateStatus("Precomputing checksums: %d files (left)", leftTotal)
+			precomputeTreeChecksumsWithProgress(a, rootOpts.algo, store, left, func(){
+				leftDone++
+				if leftTotal > 0 && (leftDone%257 == 0 || leftDone == leftTotal) {
+					ui.UpdateStatus("Precomputing (left): %d/%d", leftDone, leftTotal)
+				}
+			})
+			ui.UpdateStatus("Precomputing checksums: %d files (right)", rightTotal)
+			precomputeTreeChecksumsWithProgress(b, rootOpts.algo, store, right, func(){
+				rightDone++
+				if rightTotal > 0 && (rightDone%257 == 0 || rightDone == rightTotal) {
+					ui.UpdateStatus("Precomputing (right): %d/%d", rightDone, rightTotal)
+				}
+			})
 		}
 
+		ui.UpdateStatus("Diffing…")
 		d := fsdt.DiffWithConfig(a, b, cfg)
 		if dv, ok := d.Value.(op.DirValue); ok && dv.Reason.Type == op.Because {
 			return fmt.Errorf("incompatible or missing prerequisites: %v -> %v", dv.Reason.Before, dv.Reason.After)
@@ -91,12 +114,15 @@ var rootCmd = &cobra.Command{
 
 		switch rootOpts.format {
 		case "pretty", "tree":
+			ui.UpdateStatus("Rendering…")
 			fmt.Println(op.Print(d))
 		case "json":
+			ui.UpdateStatus("Rendering JSON…")
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			return enc.Encode(d)
 		case "paths":
+			ui.UpdateStatus("Rendering paths…")
 			for _, p := range collectPaths(d) { fmt.Println(p) }
 		default:
 			return fmt.Errorf("unknown format: %s", rootOpts.format)
@@ -116,6 +142,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&rootOpts.caseInsensitive, "ci", false, "case-insensitive diff")
 	rootCmd.Flags().StringVar(&rootOpts.format, "format", "pretty", "output format: pretty|tree|json|paths")
 	rootCmd.Flags().StringArrayVar(&rootOpts.excludes, "exclude", nil, "exclude glob (repeatable), supports doublestar patterns")
+	rootCmd.Flags().StringVar(&rootOpts.progress, "progress", "auto", "progress: on|off|auto (defaults to auto, renders spinner to stderr)")
 }
 
 func Execute() {
@@ -144,6 +171,25 @@ func precomputeTreeChecksums(folder *fsdt.Folder, algo string, store fsdt.Checks
 	recursiveEnsure(folder, opts)
 }
 
+func precomputeTreeChecksumsWithProgress(folder *fsdt.Folder, algo string, store fsdt.ChecksumStore, root string, onFile func()) {
+	opts := fsdt.ChecksumOptions{Algorithm: algo}
+	switch s := store.(type) {
+	case fsdt.XAttrStore:
+		opts.XAttrKey = s.Key
+		opts.WriteToXAttr = true
+	case fsdt.SidecarStore:
+		opts.SidecarDir = s.BaseDir
+		opts.RootPath = s.Root
+		opts.WriteToXAttr = false
+	case fsdt.MultiStore:
+		for _, inner := range s.Stores { precomputeTreeChecksumsWithProgress(folder, algo, inner, root, onFile) }
+		return
+	}
+	opts.ComputeIfMissing = true
+	opts.StreamFromDiskIfAvailable = true
+	recursiveEnsureWithProgress(folder, opts, onFile)
+}
+
 func recursiveEnsure(entry fsdt.FolderEntry, opts fsdt.ChecksumOptions) {
 	switch v := entry.(type) {
 	case *fsdt.File:
@@ -151,6 +197,19 @@ func recursiveEnsure(entry fsdt.FolderEntry, opts fsdt.ChecksumOptions) {
 	case *fsdt.Folder:
 		for _, name := range v.Entries() {
 			recursiveEnsure(v.Get(name), opts)
+		}
+		_, _, _ = v.EnsureChecksum(opts)
+	}
+}
+
+func recursiveEnsureWithProgress(entry fsdt.FolderEntry, opts fsdt.ChecksumOptions, onFile func()) {
+	switch v := entry.(type) {
+	case *fsdt.File:
+		_, _, _ = v.EnsureChecksum(opts)
+		if onFile != nil { onFile() }
+	case *fsdt.Folder:
+		for _, name := range v.Entries() {
+			recursiveEnsureWithProgress(v.Get(name), opts, onFile)
 		}
 		_, _, _ = v.EnsureChecksum(opts)
 	}
@@ -169,4 +228,19 @@ func collectPaths(d op.Operation) []string {
 	}
 	walk(d)
 	return out
+}
+
+func countFiles(entry fsdt.FolderEntry) int {
+	switch v := entry.(type) {
+	case *fsdt.File:
+		return 1
+	case *fsdt.Folder:
+		total := 0
+		for _, name := range v.Entries() {
+			total += countFiles(v.Get(name))
+		}
+		return total
+	default:
+		return 0
+	}
 }
