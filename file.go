@@ -11,11 +11,16 @@ type File struct {
 	// TODO: FileInfo might be handy
 	content []byte
 	mode    os.FileMode
+	checksum        []byte
+	checksumAlgorithm string
 }
 
 type FileOptions struct {
 	Content []byte
 	Mode    os.FileMode
+	// Optional checksum metadata, e.g. xattr-provided digest
+	Checksum          []byte
+	ChecksumAlgorithm string
 }
 
 var DEFAULT_FILE_MODE = os.FileMode(0644)
@@ -37,8 +42,10 @@ func NewFile(content ...FileOptions) *File {
 		mode = DEFAULT_FILE_MODE
 	}
 	return &File{
-		content: content[0].Content,
-		mode:    mode,
+		content:            content[0].Content,
+		mode:               mode,
+		checksum:          content[0].Checksum,
+		checksumAlgorithm: content[0].ChecksumAlgorithm,
 	}
 }
 
@@ -48,8 +55,10 @@ func (f *File) Strings(prefix string) []string {
 
 func (f *File) Clone() FolderEntry {
 	return &File{
-		content: append([]byte(nil), f.content...),
-		mode:    f.mode,
+		content:            append([]byte(nil), f.content...),
+		mode:               f.mode,
+		checksum:          append([]byte(nil), f.checksum...),
+		checksumAlgorithm: f.checksumAlgorithm,
 	}
 }
 
@@ -97,6 +106,20 @@ func (f *File) Mode() os.FileMode {
 
 func (f *File) ContentString() string {
 	return string(f.content)
+}
+
+// Checksum returns the stored checksum digest (if any) and its algorithm name.
+func (f *File) Checksum() ([]byte, string, bool) {
+	if len(f.checksum) == 0 {
+		return nil, "", false
+	}
+	return append([]byte(nil), f.checksum...), f.checksumAlgorithm, true
+}
+
+// SetChecksum sets checksum metadata for the file (e.g., from xattr) with the given algorithm name.
+func (f *File) SetChecksum(algorithm string, digest []byte) {
+	f.checksumAlgorithm = algorithm
+	f.checksum = append([]byte(nil), digest...)
 }
 
 func (f *File) Equal(entry FolderEntry) bool {

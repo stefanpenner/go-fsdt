@@ -113,3 +113,8 @@ func (l *Link) ContentString() string {
 func (l *Link) Strings(prefix string) []string {
 	return []string{prefix + " -> " + l.target}
 }
+
+// Checksum is not meaningful for links; return no checksum.
+func (l *Link) Checksum() ([]byte, string, bool) {
+	return nil, "", false
+}

@@ -26,7 +26,45 @@ func sortStringsToLower(slice []string) {
 	})
 }
 
+// FileContentStrategy controls how file content equality is determined.
+type FileContentStrategy int
+
+const (
+	// Compare file bytes directly
+	CompareBytes FileContentStrategy = iota
+	// Prefer checksum/xattr if present; fall back to bytes when unavailable or algorithms mismatch
+	PreferChecksumOrBytes
+	// Require checksum-only comparison; if absent for either side, treat as changed
+	RequireChecksum
+	// Skip comparing file content (only mode/type/name differences will be detected)
+	SkipContent
+)
+
+// DiffOptions tunes diff behavior for performance vs. thoroughness.
+type DiffOptions struct {
+	CaseSensitive bool
+	ContentStrategy FileContentStrategy
+	// Optional: when computing or comparing checksums, the expected algorithm name, e.g. "sha256"
+	ChecksumAlgorithm string
+}
+
+func defaultDiffOptions(caseSensitive bool) DiffOptions {
+	return DiffOptions{
+		CaseSensitive:   caseSensitive,
+		ContentStrategy: CompareBytes,
+	}
+}
+
+// DiffWithOptions performs a diff with fine-grained options.
+func DiffWithOptions(a, b *Folder, opts DiffOptions) op.Operation {
+	return diffInternal(a, b, opts)
+}
+
 func Diff(a, b *Folder, caseSensitive bool) op.Operation {
+	return diffInternal(a, b, defaultDiffOptions(caseSensitive))
+}
+
+func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
 	dirValue := op.DirValue{}
 
 	a_index := 0
@@ -34,7 +72,7 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 	a_keys := a.Entries()
 	b_keys := b.Entries()
 
-	if !caseSensitive {
+	if !opts.CaseSensitive {
 		sortStringsToLower(a_keys)
 		sortStringsToLower(b_keys)
 	}
@@ -47,7 +85,7 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 		a_comparable := a_key
 		b_comparable := b_key
 
-		if !caseSensitive {
+		if !opts.CaseSensitive {
 			a_comparable = strings.ToLower(a_comparable)
 			b_comparable = strings.ToLower(b_comparable)
 		}
@@ -59,29 +97,36 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 			a_type := a_entry.Type()
 			b_type := b_entry.Type()
 
-			equal, reason := a_entry.EqualWithReason(b_entry)
-
-			if equal {
-				// do nothing!
-			} else if a_type == FOLDER && b_type == FOLDER {
-				a_entry := a_entry.(*Folder)
-				b_entry := b_entry.(*Folder)
-
-				// TODO: folder modes, permissions etc. can change
-				// they are both folders, so we recurse
-				operation := Diff(a_entry, b_entry, caseSensitive)
-
-				operation.RelativePath = b_key
-				if operation.Operand != op.Noop {
-					dirValue.AddOperations(operation)
+			if a_type == FILE && b_type == FILE {
+				// File vs file: possibly custom comparison
+				changed, reason := filesDifferWithReason(a_entry.(*File), b_entry.(*File), opts)
+				if changed {
+					dirValue.AddOperations(a_entry.ChangeOperation(b_key, reason))
 				}
-			} else if a_type == FILE && b_type == FILE {
-				dirValue.AddOperations(a_entry.ChangeOperation(b_key, reason))
 			} else {
-				dirValue.AddOperations(
-					a_entry.RemoveOperation(b_key, reason),
-					b_entry.CreateOperation(b_key, reason),
-				)
+				equal, reason := a_entry.EqualWithReason(b_entry)
+				if equal {
+					// do nothing!
+				} else if a_type == FOLDER && b_type == FOLDER {
+					a_entry := a_entry.(*Folder)
+					b_entry := b_entry.(*Folder)
+
+					// TODO: folder modes, permissions etc. can change
+					// they are both folders, so we recurse
+					operation := diffInternal(a_entry, b_entry, opts)
+
+					operation.RelativePath = b_key
+					if operation.Operand != op.Noop {
+						dirValue.AddOperations(operation)
+					}
+				} else if a_type == FILE && b_type == FILE {
+					// handled above
+				} else {
+					dirValue.AddOperations(
+						a_entry.RemoveOperation(b_key, reason),
+						b_entry.CreateOperation(b_key, reason),
+					)
+				}
 			}
 
 			a_index++
@@ -123,4 +168,67 @@ func Diff(a, b *Folder, caseSensitive bool) op.Operation {
 	result := a.ChangeOperation(".", op.Reason{})
 	result.Value = dirValue
 	return result
+}
+
+func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
+	switch opts.ContentStrategy {
+	case SkipContent:
+		// Only treat as changed if metadata/mode differs
+		if a.mode != b.mode {
+			return true, op.Reason{Type: op.ModeChanged, Before: a.mode, After: b.mode}
+		}
+		return false, op.Reason{}
+	case RequireChecksum:
+		ad, an, aok := a.Checksum()
+		bd, bn, bok := b.Checksum()
+		if !aok || !bok {
+			return true, op.Reason{Type: op.ContentChanged, Before: "missing checksum", After: "missing checksum"}
+		}
+		if opts.ChecksumAlgorithm != "" && (an != opts.ChecksumAlgorithm || bn != opts.ChecksumAlgorithm) {
+			return true, op.Reason{Type: op.ContentChanged, Before: an, After: bn}
+		}
+		if bytesEqual(ad, bd) && a.mode == b.mode {
+			return false, op.Reason{}
+		}
+		return true, op.Reason{Type: op.ContentChanged, Before: ad, After: bd}
+	case PreferChecksumOrBytes:
+		ad, an, aok := a.Checksum()
+		bd, bn, bok := b.Checksum()
+		if aok && bok && (opts.ChecksumAlgorithm == "" || (an == opts.ChecksumAlgorithm && bn == opts.ChecksumAlgorithm)) {
+			if bytesEqual(ad, bd) && a.mode == b.mode {
+				return false, op.Reason{}
+			}
+			return true, op.Reason{Type: op.ContentChanged, Before: ad, After: bd}
+		}
+		fallthrough
+	case CompareBytes:
+		if a.mode != b.mode {
+			return true, op.Reason{Type: op.ModeChanged, Before: a.mode, After: b.mode}
+		}
+		if string(a.content) == string(b.content) {
+			return false, op.Reason{}
+		}
+		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
+	default:
+		// safe default
+		if a.mode != b.mode {
+			return true, op.Reason{Type: op.ModeChanged, Before: a.mode, After: b.mode}
+		}
+		if string(a.content) == string(b.content) {
+			return false, op.Reason{}
+		}
+		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
+	}
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

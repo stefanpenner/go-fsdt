@@ -27,4 +27,6 @@ type FolderEntry interface {
 	HasContent() bool
 	Content() []byte
 	ContentString() string
+	// Optional checksum capabilities (only meaningful for files)
+	Checksum() ([]byte, string, bool)
 }

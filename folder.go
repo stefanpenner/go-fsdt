@@ -309,12 +309,32 @@ func (f *Folder) Content() []byte {
 	return []byte{}
 }
 
+// Checksum is not meaningful for folders; return no checksum.
+func (f *Folder) Checksum() ([]byte, string, bool) {
+	return nil, "", false
+}
+
 func (f *Folder) Diff(b *Folder) op.Operation {
 	return Diff(f, b, true)
 }
 
 func (f *Folder) CaseInsensitiveDiff(b *Folder) op.Operation {
 	return Diff(f, b, false)
+}
+
+// DiffFast skips content comparison and only compares structure, type, and mode.
+func (f *Folder) DiffFast(b *Folder) op.Operation {
+	return DiffWithOptions(f, b, DiffOptions{CaseSensitive: true, ContentStrategy: SkipContent})
+}
+
+// DiffPreferChecksums uses checksums (e.g., xattr-provided) when available, falling back to bytes.
+func (f *Folder) DiffPreferChecksums(b *Folder, algo string) op.Operation {
+	return DiffWithOptions(f, b, DiffOptions{CaseSensitive: true, ContentStrategy: PreferChecksumOrBytes, ChecksumAlgorithm: algo})
+}
+
+// DiffWithOptions provides object method access to the configurable diff.
+func (f *Folder) DiffWithOptions(b *Folder, opts DiffOptions) op.Operation {
+	return DiffWithOptions(f, b, opts)
 }
 
 func (f *Folder) ContentString() string {
