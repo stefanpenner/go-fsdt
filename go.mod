@@ -1,6 +1,6 @@
 module github.com/stefanpenner/go-fsdt
 
-go 1.23.3
+go 1.23
 
 require github.com/stretchr/testify v1.10.0
 
