@@ -33,17 +33,18 @@ func TestDiffWithDifferentCase(t *testing.T) {
 	//
 	// But this can be for another day
 	//
-	a := NewFolder()
-	b := NewFolder()
-
-	a.FileString("README.md", "## HI\n")
-	a.FileString("a.md", "## HI\n")
-	a.FileString("keep.md", "## HI\n")
+	a := FS(map[string]string{
+		"README.md": "## HI\n",
+		"a.md":      "## HI\n",
+		"keep.md":   "## HI\n",
+	})
 	a.Symlink("b.md", "a.md")
 
-	b.FileString("readme.md", "## HI\n")
-	b.FileString("b.md", "## HI\n")
-	b.FileString("keep.md", "## HI\n")
+	b := FS(map[string]string{
+		"readme.md": "## HI\n",
+		"b.md":      "## HI\n",
+		"keep.md":   "## HI\n",
+	})
 	b.Symlink("B.md", "b.md")
 
 	assert.Equal(
@@ -68,15 +69,16 @@ func TestDiffWithDifferentCase(t *testing.T) {
 func TestDiffStuffAWithEmptyB(t *testing.T) {
 	assert := assert.New(t)
 
-	a := NewFolder()
-	b := NewFolder()
-
-	a.FileString("README.md", "## HI\n")
-	a.FileString("BUILD.bazel", "## HI\n")
-	a.Folder("apple", func(f *Folder) {})
-	a.Folder("lib", func(f *Folder) {})
-	a.Folder("apple", func(f *Folder) {})
+	a := FS(map[string]string{
+		"README.md":   "## HI\n",
+		"BUILD.bazel": "## HI\n",
+	})
+	a.Mk("apple")
+	a.Mk("lib")
+	a.Mk("apple")
 	a.Symlink("a", "apple")
+
+	b := NewFolder()
 
 	assert.Equal(op.NewChangeFolderOperation(".",
 		op.NewUnlink("BUILD.bazel"),
@@ -91,12 +93,12 @@ func TestDiffStuffBWithEmptyA(t *testing.T) {
 	assert := assert.New(t)
 
 	a := NewFolder()
-	b := NewFolder()
-
-	b.FileString("README.md", "## HI\n")
-	b.FileString("BUILD.bazel", "## HI\n")
-	b.Folder("lib")
-	b.Folder("apple")
+	b := FS(map[string]string{
+		"README.md":   "## HI\n",
+		"BUILD.bazel": "## HI\n",
+	})
+	b.Mk("lib")
+	b.Mk("apple")
 	b.Symlink("a", "apple")
 
 	assert.Equal(op.NewChangeFolderOperation(".",

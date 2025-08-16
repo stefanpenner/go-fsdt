@@ -37,6 +37,8 @@ const (
 	ContentChanged ReasonType = "Content Changed"
 	Missing        ReasonType = "Missing"
 	Because        ReasonType = "because"
+	SizeChanged    ReasonType = "Size Changed"
+	MTimeChanged   ReasonType = "MTime Changed"
 )
 
 type Operation struct {

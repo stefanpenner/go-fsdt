@@ -14,6 +14,15 @@ type Folder struct {
 	// FileInfo might be handy
 	_entries map[string]FolderEntry
 	mode     os.FileMode
+	// optional exclude globs
+	excludeGlobs []string
+	// folder-level checksum
+	checksum          []byte
+	checksumAlgorithm string
+	// source path on disk for streaming/xattr
+	sourcePath string
+	// folder-level checksum policy
+	policy ChecksumPolicy
 }
 
 var DEFAULT_FOLDER_MODE = os.FileMode(os.ModeDir | 0755)
@@ -22,6 +31,7 @@ func NewFolder(cb ...func(f *Folder)) *Folder {
 	folder := &Folder{
 		_entries: map[string]FolderEntry{},
 		mode:     DEFAULT_FOLDER_MODE,
+		policy:   ChecksumPolicy{Strategy: ChecksumOff},
 	}
 
 	for _, cb := range cb {
@@ -29,6 +39,46 @@ func NewFolder(cb ...func(f *Folder)) *Folder {
 	}
 
 	return folder
+}
+
+// Put inserts or replaces an entry under the given name.
+func (f *Folder) Put(name string, entry FolderEntry) {
+	f._entries[name] = entry
+}
+
+func (f *Folder) SetExcludeGlobs(globs []string) {
+	f.excludeGlobs = append([]string(nil), globs...)
+}
+
+func (f *Folder) ExcludeGlobs() []string {
+	return append([]string(nil), f.excludeGlobs...)
+}
+
+func (f *Folder) SetChecksum(algorithm string, digest []byte) {
+	f.checksumAlgorithm = algorithm
+	f.checksum = append([]byte(nil), digest...)
+}
+
+// EnsureChecksum ensures this folder has a checksum; computes from children if missing and optionally writes xattr
+func (f *Folder) EnsureChecksum(opts ChecksumOptions) ([]byte, string, bool) {
+	if d, n, ok := f.Checksum(); ok {
+		if f.sourcePath != "" {
+			writeChecksumCache(f.sourcePath, d, opts)
+		}
+		return d, n, true
+	}
+	if !opts.ComputeIfMissing || opts.Algorithm == "" {
+		return nil, "", false
+	}
+	d := computeFolderChecksum(f, opts.Algorithm)
+	if d == nil {
+		return nil, "", false
+	}
+	f.SetChecksum(opts.Algorithm, d)
+	if f.sourcePath != "" {
+		writeChecksumCache(f.sourcePath, d, opts)
+	}
+	return d, opts.Algorithm, true
 }
 
 func (f *Folder) Entries() []string {
@@ -136,6 +186,10 @@ func (f *Folder) Hardlink(link string, target string) *Link {
 func (f *Folder) Clone() FolderEntry {
 	clone := NewFolder()
 	clone.mode = f.mode
+	clone.excludeGlobs = append([]string(nil), f.excludeGlobs...)
+	clone.checksum = append([]byte(nil), f.checksum...)
+	clone.checksumAlgorithm = f.checksumAlgorithm
+	clone.sourcePath = f.sourcePath
 	for name, entry := range f._entries {
 		clone._entries[name] = entry.Clone()
 	}
@@ -193,11 +247,32 @@ func (f *Folder) WriteTo(location string) error {
 
 func ReadFrom(path string) (*Folder, error) {
 	folder := NewFolder()
-	error := folder.ReadFrom(path)
+	error := folder.ReadFromWithOptions(path, LoadOptions{})
 	return folder, error
 }
 
+// LoadOptions controls how filesystem metadata such as xattr checksums are loaded.
+type LoadOptions struct {
+	// If set, attempt to read checksum from xattr with this key (e.g., "user.sha256")
+	XAttrChecksumKey string
+	// Label to store with the checksum so algorithms can be matched during compare, e.g., "sha256"
+	ChecksumAlgorithm string
+	// If true and no xattr is present, compute checksum from content using the provided algorithm
+	ComputeChecksumIfMissing bool
+	// If true, write the computed checksum back to xattr when missing
+	WriteComputedChecksumToXAttr bool
+	// If true, compute a folder-level checksum (from self + children) when missing
+	ComputeFolderChecksumIfMissing bool
+	// If true, write computed folder checksum back to xattr when missing
+	WriteComputedFolderChecksumToXAttr bool
+}
+
 func (f *Folder) ReadFrom(path string) error {
+	return f.ReadFromWithOptions(path, LoadOptions{})
+}
+
+func (f *Folder) ReadFromWithOptions(path string, opts LoadOptions) error {
+	f.sourcePath = path
 	dirs, err := os.ReadDir(path)
 	if err != nil {
 		return err
@@ -206,12 +281,13 @@ func (f *Folder) ReadFrom(path string) error {
 	for _, entry := range dirs {
 		if entry.IsDir() {
 			folder := f.Folder(entry.Name(), func(f *Folder) {})
-			err = folder.ReadFrom(filepath.Join(path, entry.Name()))
+			err = folder.ReadFromWithOptions(filepath.Join(path, entry.Name()), opts)
 			if err != nil {
 				return err
 			}
 		} else if entry.Type().IsRegular() {
-			content, err := os.ReadFile(filepath.Join(path, entry.Name()))
+			full := filepath.Join(path, entry.Name())
+			content, err := os.ReadFile(full)
 			if err != nil {
 				return err
 			}
@@ -219,10 +295,27 @@ func (f *Folder) ReadFrom(path string) error {
 			if err != nil {
 				return err
 			}
-			f.File(entry.Name(), FileOptions{
+			file := f.File(entry.Name(), FileOptions{
 				Content: content,
 				Mode:    info.Mode(),
+				MTime:   info.ModTime(),
+				Size:    info.Size(),
 			})
+			file.sourcePath = full
+
+			if opts.XAttrChecksumKey != "" {
+				if digest, ok, _ := readXAttrChecksum(full, opts.XAttrChecksumKey); ok {
+					file.SetChecksum(opts.ChecksumAlgorithm, digest)
+				} else if opts.ComputeChecksumIfMissing && opts.ChecksumAlgorithm != "" {
+					d := computeChecksumFromPathOrBytes(opts.ChecksumAlgorithm, full, content)
+					if d != nil {
+						file.SetChecksum(opts.ChecksumAlgorithm, d)
+						if opts.WriteComputedChecksumToXAttr {
+							_ = writeXAttrChecksum(full, opts.XAttrChecksumKey, d)
+						}
+					}
+				}
+			}
 		} else if entry.Type()&os.ModeSymlink != 0 {
 			target, err := os.Readlink(filepath.Join(path, entry.Name()))
 			if err != nil {
@@ -232,6 +325,19 @@ func (f *Folder) ReadFrom(path string) error {
 			f.Symlink(entry.Name(), target)
 		} else {
 			return fmt.Errorf("Unexpected DirEntry Type: %s", entry.Type())
+		}
+	}
+
+	// Compute folder checksum if requested
+	if opts.ChecksumAlgorithm != "" && opts.ComputeFolderChecksumIfMissing {
+		if _, _, has := f.Checksum(); !has {
+			d := computeFolderChecksum(f, opts.ChecksumAlgorithm)
+			if d != nil {
+				f.SetChecksum(opts.ChecksumAlgorithm, d)
+				if opts.WriteComputedFolderChecksumToXAttr && opts.XAttrChecksumKey != "" && f.sourcePath != "" {
+					_ = writeXAttrChecksum(f.sourcePath, opts.XAttrChecksumKey, d)
+				}
+			}
 		}
 	}
 
@@ -309,6 +415,14 @@ func (f *Folder) Content() []byte {
 	return []byte{}
 }
 
+// Checksum for folders returns folder-level checksum
+func (f *Folder) Checksum() ([]byte, string, bool) {
+	if len(f.checksum) == 0 {
+		return nil, "", false
+	}
+	return append([]byte(nil), f.checksum...), f.checksumAlgorithm, true
+}
+
 func (f *Folder) Diff(b *Folder) op.Operation {
 	return Diff(f, b, true)
 }
@@ -317,6 +431,61 @@ func (f *Folder) CaseInsensitiveDiff(b *Folder) op.Operation {
 	return Diff(f, b, false)
 }
 
+// DiffFast skips content comparison and only compares structure, type, and mode.
+func (f *Folder) DiffFast(b *Folder) op.Operation {
+	return DiffWithOptions(f, b, DiffOptions{CaseSensitive: true, ContentStrategy: SkipContent})
+}
+
+// DiffPreferChecksums uses checksums (e.g., xattr-provided) when available, falling back to bytes.
+func (f *Folder) DiffPreferChecksums(b *Folder, algo string) op.Operation {
+	return DiffWithOptions(f, b, DiffOptions{CaseSensitive: true, ContentStrategy: PreferChecksumOrBytes, ChecksumAlgorithm: algo})
+}
+
+// DiffWithOptions provides object method access to the configurable diff.
+func (f *Folder) DiffWithOptions(b *Folder, opts DiffOptions) op.Operation {
+	return DiffWithOptions(f, b, opts)
+}
+
 func (f *Folder) ContentString() string {
 	panic("fsdt:folder.go(Folder does not implement contentString)")
+}
+
+// computeFolderChecksum computes a folder checksum as a digest of folder metadata and child checksums.
+func computeFolderChecksum(folder *Folder, algorithm string) []byte {
+	h := newHash(algorithm)
+	if h == nil {
+		return nil
+	}
+	// include folder mode
+	ioWriteString(h, fmt.Sprintf("dir|mode:%o\n", folder.mode))
+	// include each child (sorted by name)
+	for _, name := range folder.Entries() {
+		if shouldExclude(normalizePath("", name), folder.excludeGlobs) {
+			continue
+		}
+		entry := folder._entries[name]
+		// for files and folders, prefer their checksum; compute if file has none
+		switch e := entry.(type) {
+		case *File:
+			if d, n, ok := e.Checksum(); ok {
+				ioWriteString(h, fmt.Sprintf("file|%s|algo:%s|%x\n", name, n, d))
+			} else {
+				// compute from content or path
+				d := computeChecksumFromPathOrBytes(algorithm, e.sourcePath, e.content)
+				ioWriteString(h, fmt.Sprintf("file|%s|algo:%s|%x\n", name, algorithm, d))
+			}
+		case *Folder:
+			if d, n, ok := e.Checksum(); ok {
+				ioWriteString(h, fmt.Sprintf("dir|%s|algo:%s|%x\n", name, n, d))
+			} else {
+				d := computeFolderChecksum(e, algorithm)
+				ioWriteString(h, fmt.Sprintf("dir|%s|algo:%s|%x\n", name, algorithm, d))
+			}
+		case *Link:
+			ioWriteString(h, fmt.Sprintf("link|%s|%s\n", name, e.Target()))
+		default:
+			ioWriteString(h, fmt.Sprintf("unknown|%s\n", name))
+		}
+	}
+	return h.Sum(nil)
 }
