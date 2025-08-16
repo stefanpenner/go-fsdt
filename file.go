@@ -3,6 +3,7 @@ package fsdt
 import (
 	"bytes"
 	"os"
+	"time"
 
 	op "github.com/stefanpenner/go-fsdt/operation"
 )
@@ -13,6 +14,8 @@ type File struct {
 	mode    os.FileMode
 	checksum        []byte
 	checksumAlgorithm string
+	mtime   time.Time
+	size    int64
 }
 
 type FileOptions struct {
@@ -21,6 +24,9 @@ type FileOptions struct {
 	// Optional checksum metadata, e.g. xattr-provided digest
 	Checksum          []byte
 	ChecksumAlgorithm string
+	// Optional file metadata
+	MTime time.Time
+	Size  int64
 }
 
 var DEFAULT_FILE_MODE = os.FileMode(0644)
@@ -37,15 +43,22 @@ func NewFile(content ...FileOptions) *File {
 		}
 	}
 
-	mode := content[0].Mode
+	opts := content[0]
+	mode := opts.Mode
 	if mode == 0 {
 		mode = DEFAULT_FILE_MODE
 	}
+	computedSize := opts.Size
+	if computedSize == 0 && opts.Content != nil {
+		computedSize = int64(len(opts.Content))
+	}
 	return &File{
-		content:            content[0].Content,
+		content:            opts.Content,
 		mode:               mode,
-		checksum:          content[0].Checksum,
-		checksumAlgorithm: content[0].ChecksumAlgorithm,
+		checksum:          opts.Checksum,
+		checksumAlgorithm: opts.ChecksumAlgorithm,
+		mtime:             opts.MTime,
+		size:              computedSize,
 	}
 }
 
@@ -59,6 +72,8 @@ func (f *File) Clone() FolderEntry {
 		mode:               f.mode,
 		checksum:          append([]byte(nil), f.checksum...),
 		checksumAlgorithm: f.checksumAlgorithm,
+		mtime:             f.mtime,
+		size:              f.size,
 	}
 }
 
@@ -102,6 +117,14 @@ func (f *File) Content() []byte {
 
 func (f *File) Mode() os.FileMode {
 	return f.mode
+}
+
+func (f *File) MTime() time.Time {
+	return f.mtime
+}
+
+func (f *File) Size() int64 {
+	return f.size
 }
 
 func (f *File) ContentString() string {

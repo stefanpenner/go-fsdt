@@ -46,12 +46,17 @@ type DiffOptions struct {
 	ContentStrategy FileContentStrategy
 	// Optional: when computing or comparing checksums, the expected algorithm name, e.g. "sha256"
 	ChecksumAlgorithm string
+	// Optional metadata comparisons
+	CompareMode  bool // default true
+	CompareSize  bool // default false
+	CompareMTime bool // default false
 }
 
 func defaultDiffOptions(caseSensitive bool) DiffOptions {
 	return DiffOptions{
 		CaseSensitive:   caseSensitive,
 		ContentStrategy: CompareBytes,
+		CompareMode:     true,
 	}
 }
 
@@ -171,12 +176,13 @@ func diffInternal(a, b *Folder, opts DiffOptions) op.Operation {
 }
 
 func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
+	// First, check metadata if requested
+	if changed, reason := fileMetadataDiff(a, b, opts); changed {
+		return true, reason
+	}
+
 	switch opts.ContentStrategy {
 	case SkipContent:
-		// Only treat as changed if metadata/mode differs
-		if a.mode != b.mode {
-			return true, op.Reason{Type: op.ModeChanged, Before: a.mode, After: b.mode}
-		}
 		return false, op.Reason{}
 	case RequireChecksum:
 		ad, an, aok := a.Checksum()
@@ -187,7 +193,7 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		if opts.ChecksumAlgorithm != "" && (an != opts.ChecksumAlgorithm || bn != opts.ChecksumAlgorithm) {
 			return true, op.Reason{Type: op.ContentChanged, Before: an, After: bn}
 		}
-		if bytesEqual(ad, bd) && a.mode == b.mode {
+		if bytesEqual(ad, bd) {
 			return false, op.Reason{}
 		}
 		return true, op.Reason{Type: op.ContentChanged, Before: ad, After: bd}
@@ -195,30 +201,36 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		ad, an, aok := a.Checksum()
 		bd, bn, bok := b.Checksum()
 		if aok && bok && (opts.ChecksumAlgorithm == "" || (an == opts.ChecksumAlgorithm && bn == opts.ChecksumAlgorithm)) {
-			if bytesEqual(ad, bd) && a.mode == b.mode {
+			if bytesEqual(ad, bd) {
 				return false, op.Reason{}
 			}
 			return true, op.Reason{Type: op.ContentChanged, Before: ad, After: bd}
 		}
 		fallthrough
 	case CompareBytes:
-		if a.mode != b.mode {
-			return true, op.Reason{Type: op.ModeChanged, Before: a.mode, After: b.mode}
-		}
 		if string(a.content) == string(b.content) {
 			return false, op.Reason{}
 		}
 		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
 	default:
-		// safe default
-		if a.mode != b.mode {
-			return true, op.Reason{Type: op.ModeChanged, Before: a.mode, After: b.mode}
-		}
 		if string(a.content) == string(b.content) {
 			return false, op.Reason{}
 		}
 		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
 	}
+}
+
+func fileMetadataDiff(a, b *File, opts DiffOptions) (bool, op.Reason) {
+	if opts.CompareMode && a.mode != b.mode {
+		return true, op.Reason{Type: op.ModeChanged, Before: a.mode, After: b.mode}
+	}
+	if opts.CompareSize && a.size != b.size {
+		return true, op.Reason{Type: op.SizeChanged, Before: a.size, After: b.size}
+	}
+	if opts.CompareMTime && !a.mtime.Equal(b.mtime) {
+		return true, op.Reason{Type: op.MTimeChanged, Before: a.mtime, After: b.mtime}
+	}
+	return false, op.Reason{}
 }
 
 func bytesEqual(a, b []byte) bool {

@@ -222,6 +222,8 @@ func (f *Folder) ReadFrom(path string) error {
 			f.File(entry.Name(), FileOptions{
 				Content: content,
 				Mode:    info.Mode(),
+				MTime:   info.ModTime(),
+				Size:    info.Size(),
 			})
 		} else if entry.Type()&os.ModeSymlink != 0 {
 			target, err := os.Readlink(filepath.Join(path, entry.Name()))
