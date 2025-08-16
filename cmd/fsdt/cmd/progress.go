@@ -3,101 +3,123 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/spinner"
 )
 
-type statusMsg string
-
-type progressModel struct {
-	sp      spinner.Model
-	status  string
-	quitting bool
-}
-
-func (m progressModel) Init() tea.Cmd {
-	return m.sp.Tick
-}
-
-func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		// Ignore key input; non-interactive
-		return m, nil
-	case statusMsg:
-		m.status = string(msg)
-		return m, nil
-	default:
-		var cmd tea.Cmd
-		m.sp, cmd = m.sp.Update(msg)
-		return m, cmd
-	}
-}
-
-func (m progressModel) View() string {
-	if m.quitting {
-		return ""
-	}
-	// Render to stderr; actual output is handled by Bubble Tea program options
-	return fmt.Sprintf("\r%s %s", m.sp.View(), m.status)
-}
-
 type progressUI struct {
-	mu       sync.Mutex
-	program  *tea.Program
-	enabled  bool
-	closed   bool
+	enabled   bool
+	started   atomic.Bool
+	stopped   atomic.Bool
+
+	// status
+	task    atomic.Value // string
+	scanDir atomic.Value // string
+
+	leftDone  atomic.Uint64
+	leftTotal atomic.Uint64
+	rightDone  atomic.Uint64
+	rightTotal atomic.Uint64
+
+	// rendering
+	mu      sync.Mutex
+	ticker  *time.Ticker
+	stopCh  chan struct{}
+	frames  []string
+	frameIx int
 }
 
 func newProgressUI(enabled bool) *progressUI {
-	return &progressUI{enabled: enabled}
+	p := &progressUI{enabled: enabled}
+	p.frames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	p.task.Store("")
+	p.scanDir.Store("")
+	return p
 }
 
 func (p *progressUI) Start(initial string) {
-	if !p.enabled {
+	if !p.enabled || p.started.Load() {
 		return
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.program != nil {
-		return
-	}
-	sp := spinner.New()
-	m := progressModel{sp: sp, status: initial}
-	prog := tea.NewProgram(m, tea.WithOutput(os.Stderr))
-	p.program = prog
-	go func() { _, _ = prog.Run() }()
-	// Give the renderer a moment to start so first status is visible
-	time.Sleep(30 * time.Millisecond)
+	p.task.Store(initial)
+	p.stopCh = make(chan struct{})
+	p.ticker = time.NewTicker(100 * time.Millisecond)
+	p.started.Store(true)
+	go p.loop()
 }
 
-func (p *progressUI) UpdateStatus(format string, a ...any) {
+func (p *progressUI) loop() {
+	for {
+		select {
+		case <-p.ticker.C:
+			p.renderOnce()
+		case <-p.stopCh:
+			p.clearLine()
+			return
+		}
+	}
+}
+
+func (p *progressUI) renderOnce() {
 	if !p.enabled {
 		return
 	}
 	p.mu.Lock()
-	prog := p.program
+	p.frameIx = (p.frameIx + 1) % len(p.frames)
+	frame := p.frames[p.frameIx]
 	p.mu.Unlock()
-	if prog == nil {
+
+	task := p.getString(&p.task)
+	dir := p.getString(&p.scanDir)
+	ld, lt := p.leftDone.Load(), p.leftTotal.Load()
+	rd, rt := p.rightDone.Load(), p.rightTotal.Load()
+
+	var parts []string
+	if task != "" {
+		parts = append(parts, task)
+	}
+	if dir != "" {
+		parts = append(parts, fmt.Sprintf("dir: %s", dir))
+	}
+	if lt > 0 || rt > 0 {
+		parts = append(parts, fmt.Sprintf("files L %d/%d R %d/%d", ld, lt, rd, rt))
+	}
+	line := strings.Join(parts, "  ·  ")
+	fmt.Fprintf(os.Stderr, "\r\x1b[2K%s %s", frame, line)
+}
+
+func (p *progressUI) clearLine() {
+	if !p.enabled {
 		return
 	}
-	prog.Send(statusMsg(fmt.Sprintf(format, a...)))
+	fmt.Fprint(os.Stderr, "\r\x1b[2K")
 }
 
 func (p *progressUI) Stop() {
-	if !p.enabled {
+	if !p.enabled || !p.started.Load() || p.stopped.Load() {
 		return
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.closed || p.program == nil {
-		return
-	}
-	p.program.Quit()
-	p.closed = true
-	// Ensure the spinner line is cleared
-	fmt.Fprint(os.Stderr, "\r\x1b[2K")
+	p.stopped.Store(true)
+	close(p.stopCh)
+	p.ticker.Stop()
+	// Move to next line so following stdout prints are clean
+	fmt.Fprintln(os.Stderr)
 }
+
+func (p *progressUI) getString(v *atomic.Value) string {
+	if s, ok := v.Load().(string); ok {
+		return s
+	}
+	return ""
+}
+
+// Setters used by the CLI flow
+func (p *progressUI) SetTask(s string) { p.task.Store(s) }
+func (p *progressUI) SetScanDir(s string) { p.scanDir.Store(s) }
+
+func (p *progressUI) SetLeftTotal(n int)  { p.leftTotal.Store(uint64(n)) }
+func (p *progressUI) SetRightTotal(n int) { p.rightTotal.Store(uint64(n)) }
+func (p *progressUI) IncLeftDone()        { p.leftDone.Add(1) }
+func (p *progressUI) IncRightDone()       { p.rightDone.Add(1) }

@@ -66,9 +66,10 @@ var rootCmd = &cobra.Command{
 			load.ComputeChecksumIfMissing = false
 			load.WriteComputedChecksumToXAttr = false
 		}
-		ui.UpdateStatus("Scanning: %s", left)
+		ui.SetTask("Scanning")
+		ui.SetScanDir(left)
 		if err := a.ReadFromWithOptions(left, load); err != nil { return err }
-		ui.UpdateStatus("Scanning: %s", right)
+		ui.SetScanDir(right)
 		if err := b.ReadFromWithOptions(right, load); err != nil { return err }
 
 		// Config
@@ -89,43 +90,33 @@ var rootCmd = &cobra.Command{
 		if rootOpts.precompute && store != nil && (cfg.Strategy == fsdt.ChecksumPrefer || cfg.Strategy == fsdt.ChecksumEnsure) {
 			leftTotal := countFiles(a)
 			rightTotal := countFiles(b)
-			var leftDone, rightDone int
-			ui.UpdateStatus("Precomputing checksums: %d files (left)", leftTotal)
-			precomputeTreeChecksumsWithProgress(a, rootOpts.algo, store, left, func(){
-				leftDone++
-				if leftTotal > 0 && (leftDone%257 == 0 || leftDone == leftTotal) {
-					ui.UpdateStatus("Precomputing (left): %d/%d", leftDone, leftTotal)
-				}
-			})
-			ui.UpdateStatus("Precomputing checksums: %d files (right)", rightTotal)
-			precomputeTreeChecksumsWithProgress(b, rootOpts.algo, store, right, func(){
-				rightDone++
-				if rightTotal > 0 && (rightDone%257 == 0 || rightDone == rightTotal) {
-					ui.UpdateStatus("Precomputing (right): %d/%d", rightDone, rightTotal)
-				}
-			})
+			ui.SetLeftTotal(leftTotal)
+			ui.SetRightTotal(rightTotal)
+			ui.SetTask("Precomputing checksums (left)")
+			precomputeTreeChecksumsWithProgress(a, rootOpts.algo, store, left, func(){ ui.IncLeftDone() })
+			ui.SetTask("Precomputing checksums (right)")
+			precomputeTreeChecksumsWithProgress(b, rootOpts.algo, store, right, func(){ ui.IncRightDone() })
 		}
 
-		ui.UpdateStatus("Diffing…")
+		ui.SetTask("Diffing")
 		d := fsdt.DiffWithConfig(a, b, cfg)
 		if dv, ok := d.Value.(op.DirValue); ok && dv.Reason.Type == op.Because {
 			return fmt.Errorf("incompatible or missing prerequisites: %v -> %v", dv.Reason.Before, dv.Reason.After)
 		}
 
+		// Stop progress before printing results
+		ui.Stop()
+
 		switch rootOpts.format {
 		case "pretty", "tree":
-			ui.Stop()
 			fmt.Println(op.Print(d))
 		case "json":
-			ui.Stop()
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			return enc.Encode(d)
 		case "paths":
-			ui.Stop()
 			for _, p := range collectPaths(d) { fmt.Println(p) }
 		default:
-			ui.Stop()
 			return fmt.Errorf("unknown format: %s", rootOpts.format)
 		}
 		return nil
@@ -143,7 +134,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&rootOpts.caseInsensitive, "ci", false, "case-insensitive diff")
 	rootCmd.Flags().StringVar(&rootOpts.format, "format", "pretty", "output format: pretty|tree|json|paths")
 	rootCmd.Flags().StringArrayVar(&rootOpts.excludes, "exclude", nil, "exclude glob (repeatable), supports doublestar patterns")
-	rootCmd.Flags().StringVar(&rootOpts.progress, "progress", "auto", "progress: on|off|auto (defaults to auto, renders spinner to stderr)")
+	rootCmd.Flags().StringVar(&rootOpts.progress, "progress", "auto", "progress: on|off|auto (defaults to auto, renders status to stderr)")
 }
 
 func Execute() {
