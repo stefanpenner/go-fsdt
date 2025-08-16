@@ -272,16 +272,29 @@ func filesDifferWithReason(a, b *File, opts DiffOptions) (bool, op.Reason) {
 		}
 		fallthrough
 	case CompareBytes:
-		// Compare raw bytes; also used as fallback when checksums are unavailable or mismatched
-		if string(a.content) == string(b.content) {
-			return false, op.Reason{}
+		// Prefer size and streaming-based comparison for very large contents
+		if a.size != b.size { return true, reasonForContentChange(a.content, b.content, a.size, b.size) }
+		if opts.StreamFromDiskIfAvailable {
+			if r := streamEqualByPath(a, b); r != nil {
+				if *r { return false, op.Reason{} }
+				return true, reasonForContentChange(a.content, b.content, a.size, b.size)
+			}
 		}
-		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
+		// Fallback to in-memory compare if available
+		if len(a.content) != len(b.content) { return true, reasonForContentChange(a.content, b.content, int64(len(a.content)), int64(len(b.content))) }
+		if bytesEqual(a.content, b.content) { return false, op.Reason{} }
+		return true, reasonForContentChange(a.content, b.content, int64(len(a.content)), int64(len(b.content)))
 	default:
-		if string(a.content) == string(b.content) {
-			return false, op.Reason{}
+		if a.size != b.size { return true, reasonForContentChange(a.content, b.content, a.size, b.size) }
+		if opts.StreamFromDiskIfAvailable {
+			if r := streamEqualByPath(a, b); r != nil {
+				if *r { return false, op.Reason{} }
+				return true, reasonForContentChange(a.content, b.content, a.size, b.size)
+			}
 		}
-		return true, op.Reason{Type: op.ContentChanged, Before: a.content, After: b.content}
+		if len(a.content) != len(b.content) { return true, reasonForContentChange(a.content, b.content, int64(len(a.content)), int64(len(b.content))) }
+		if bytesEqual(a.content, b.content) { return false, op.Reason{} }
+		return true, reasonForContentChange(a.content, b.content, int64(len(a.content)), int64(len(b.content)))
 	}
 }
 
@@ -289,18 +302,11 @@ func ensureChecksum(f *File, d []byte, n string, ok bool, opts DiffOptions) ([]b
 	if ok {
 		return d, n, ok
 	}
-	var content []byte
+	var path string
 	if opts.StreamFromDiskIfAvailable {
-		if path, has := f.SourcePath(); has {
-			if data, err := readAllStreaming(path); err == nil {
-				content = data
-			}
-		}
+		if p, has := f.SourcePath(); has { path = p }
 	}
-	if content == nil {
-		content = f.content
-	}
-	d = computeChecksum(opts.ChecksumAlgorithm, content)
+	d = computeChecksumFromPathOrBytes(opts.ChecksumAlgorithm, path, f.content)
 	if d != nil {
 		f.SetChecksum(opts.ChecksumAlgorithm, d)
 		if opts.WriteComputedChecksumToXAttr {

@@ -76,6 +76,10 @@ func lengthOf(v interface{}) int {
 		return len(t)
 	case string:
 		return len(t)
+	case ContentSummary:
+		if t.Size < 0 { return -1 }
+		if t.Size > int64(int(^uint(0)>>1)) { return int(^uint(0)>>1) }
+		return int(t.Size)
 	default:
 		return -1
 	}
