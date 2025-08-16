@@ -21,6 +21,8 @@ type Folder struct {
 	checksumAlgorithm string
 	// source path on disk for streaming/xattr
 	sourcePath string
+	// folder-level checksum policy
+	policy ChecksumPolicy
 }
 
 var DEFAULT_FOLDER_MODE = os.FileMode(os.ModeDir | 0755)
@@ -29,6 +31,7 @@ func NewFolder(cb ...func(f *Folder)) *Folder {
 	folder := &Folder{
 		_entries: map[string]FolderEntry{},
 		mode:     DEFAULT_FOLDER_MODE,
+		policy:   ChecksumPolicy{Strategy: ChecksumOff},
 	}
 
 	for _, cb := range cb {

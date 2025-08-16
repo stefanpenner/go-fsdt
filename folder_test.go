@@ -78,14 +78,14 @@ func TestFolderStrings(t *testing.T) {
 	folder.Symlink("lib/foo-link", "foo")
 
 	// Strings
-	assert.Equal([]string{"README.md", "lib/", "lib/foo/", "lib/foo/bar/", "lib/foo/bar/baz.go", "lib/foo-link -> foo", "lib/lib-link.go -> lib.go", "lib/lib.go"}, folder.Strings(""))
-	assert.Equal([]string{"root/", "root/README.md", "root/lib/", "root/lib/foo/", "root/lib/foo/bar/", "root/lib/foo/bar/baz.go", "root/lib/foo-link -> foo", "root/lib/lib-link.go -> lib.go", "root/lib/lib.go"}, folder.Strings("root"))
-	assert.Equal([]string{"/root/", "/root/README.md", "/root/lib/", "/root/lib/foo/", "/root/lib/foo/bar/", "/root/lib/foo/bar/baz.go", "/root/lib/foo-link -> foo", "/root/lib/lib-link.go -> lib.go", "/root/lib/lib.go"}, folder.Strings("/root"))
+	assert.Equal([]string{"README.md", "lib/", "lib/foo/", "lib/foo/bar/", "lib/foo/bar/baz.go", "lib/lib.go", "lib/foo-link -> foo", "lib/lib-link.go -> lib.go"}, folder.Strings(""))
+	assert.Equal([]string{"root/", "root/README.md", "root/lib/", "root/lib/foo/", "root/lib/foo/bar/", "root/lib/foo/bar/baz.go", "root/lib/lib.go", "root/lib/foo-link -> foo", "root/lib/lib-link.go -> lib.go"}, folder.Strings("root"))
+	assert.Equal([]string{"/root/", "/root/README.md", "/root/lib/", "/root/lib/foo/", "/root/lib/foo/bar/", "/root/lib/foo/bar/baz.go", "/root/lib/lib.go", "/root/lib/foo-link -> foo", "/root/lib/lib-link.go -> lib.go"}, folder.Strings("/root"))
 
 	// FileStrings
-	assert.Equal([]string{"README.md", "lib/foo/bar/baz.go", "lib/foo-link", "lib/lib-link.go", "lib/lib.go"}, folder.FileStrings(""))
-	assert.Equal([]string{"root/README.md", "root/lib/foo/bar/baz.go", "root/lib/foo-link", "root/lib/lib-link.go", "root/lib/lib.go"}, folder.FileStrings("root"))
-	assert.Equal([]string{"/root/README.md", "/root/lib/foo/bar/baz.go", "/root/lib/foo-link", "/root/lib/lib-link.go", "/root/lib/lib.go"}, folder.FileStrings("/root"))
+	assert.Equal([]string{"README.md", "lib/foo/bar/baz.go", "lib/lib.go", "lib/foo-link", "lib/lib-link.go"}, folder.FileStrings(""))
+	assert.Equal([]string{"root/README.md", "root/lib/foo/bar/baz.go", "root/lib/lib.go", "root/lib/foo-link", "root/lib/lib-link.go"}, folder.FileStrings("root"))
+	assert.Equal([]string{"/root/README.md", "/root/lib/foo/bar/baz.go", "/root/lib/lib.go", "/root/lib/foo-link", "/root/lib/lib-link.go"}, folder.FileStrings("/root"))
 }
 
 func TestFolderCallback(t *testing.T) {
