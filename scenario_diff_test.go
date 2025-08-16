@@ -4,12 +4,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	op "github.com/stefanpenner/go-fsdt/operation"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_Scenario_FastVsAccurate(t *testing.T) {
 	require := require.New(t)
-	dir := t.TempDir()
 	left := NewFolder()
 	right := NewFolder()
 
